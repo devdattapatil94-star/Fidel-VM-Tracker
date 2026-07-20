@@ -1,9 +1,10 @@
 import streamlit as st
 import pandas as pd
+import os
 from datetime import datetime
 
 # ==========================================
-# 1. PAGE CONFIGURATION & INTAKE SETTINGS
+# 1. PAGE CONFIGURATION & DATABASE SETUP
 # ==========================================
 st.set_page_config(
     page_title="VM Production & Pipeline Tracker",
@@ -11,9 +12,20 @@ st.set_page_config(
     layout="wide"
 )
 
-# Initialize data state tracking matrix for the pipeline rows
-if "pipeline_data" not in st.session_state:
-    st.session_state.pipeline_data = []
+DB_FILE = "pipeline_database.csv"
+
+# Status drop-down menu array items exactly matching your tracking lifecycle requirements
+STATUS_OPTIONS = [
+    "Not started", 
+    "In progress", 
+    "Completed", 
+    "Cancelled", 
+    "Delayed", 
+    "In Discussion stage with the PM", 
+    "In Discussion stage with the client", 
+    "No Response received later from the linguist", 
+    "Pending"
+]
 
 # Master list array containing your explicit language directory selections
 LANGUAGES_POOL = [
@@ -91,6 +103,25 @@ LANGUAGES_POOL = [
     "Yagwoia", "Yiddish (Israel)", "Yiddish (USA)", "Yoruba", "Zomi/Zou", "Zulu (South Africa)"
 ]
 
+# Robust read execution to retain structural pipeline data state across sessions safely
+def load_database():
+    if os.path.exists(DB_FILE):
+        try:
+            return pd.read_csv(DB_FILE)
+        except:
+            pass
+    # Create layout columns configuration structure fallback map
+    return pd.DataFrame(columns=[
+        "Project ID", "Timestamp", "Source Language", "Target Language", 
+        "Task Type", "CAT Tool(s)", "Volume", "Reference File", 
+        "Deadline (IST)", "Budget", "Status"
+    ])
+
+def save_database(df):
+    df.to_csv(DB_FILE, index=False)
+
+df_db = load_database()
+
 # ==========================================
 # 2. SIDEBAR NAVIGATION & INTAKE CONTROL ENGINE
 # ==========================================
@@ -121,8 +152,6 @@ with st.sidebar:
     selected_tools = st.multiselect("Client CAT Tool *", options=cat_options)
     
     volume = st.text_input("Volume (Words / Minutes) *", placeholder="e.g., 5000 words")
-    
-    # Optional sample/reference file uploader option component drop matrix
     ref_file = st.file_uploader("Reference or sample file (if any)", type=['txt', 'pdf', 'doc', 'docx', 'xls', 'xlsx', 'zip'])
     
     st.markdown("<label style='font-size: 14px;'>Client Deadline Date *</label>", unsafe_allow_html=True)
@@ -158,10 +187,13 @@ with st.sidebar:
             else:
                 formatted_budget = f"{symbol}{budget_val:.3f}".rstrip('0').rstrip('.') if budget_val % 0.01 != 0 else f"{symbol}{budget_val:,.2f}"
             
-            # Extract name string if file exists
             file_name_record = ref_file.name if ref_file is not None else "None"
             
-            new_task = {
+            # Form unique index matrix tracker values
+            proj_id = f"FID-{datetime.now().strftime('%m%d%H%M%S')}"
+            
+            new_task = pd.DataFrame([{
+                "Project ID": proj_id,
                 "Timestamp": datetime.now().strftime("%Y-%m-%d %H:%M"),
                 "Source Language": src_str,
                 "Target Language": tgt_str,
@@ -171,10 +203,14 @@ with st.sidebar:
                 "Reference File": file_name_record,
                 "Deadline (IST)": formatted_deadline,
                 "Budget": formatted_budget,
-                "Status": "Pipeline Intake"
-            }
-            st.session_state.pipeline_data.append(new_task)
+                "Status": "Not started"
+            }])
+            
+            # Combine entry arrays safely and write changes down immediately
+            df_updated = pd.concat([df_db, new_task], ignore_index=True)
+            save_database(df_updated)
             st.success("🎯 Task successfully routed to main production queue.")
+            st.rerun()
         else:
             st.error("❌ Form Incomplete. Please specify languages, tools, volume, and budget metrics.")
 
@@ -195,8 +231,36 @@ with col_title:
 st.write("Track active localization workflows, monitor client budgets against vendor rates, and manage execution states seamlessly.")
 st.markdown("---")
 
-if len(st.session_state.pipeline_data) == 0:
+# Conditional tracking row matrix generation pad
+if len(df_db) == 0:
     st.info("💡 No active pipeline requirements registered yet. Use the sidebar form to populate tasks into the tracker matrix.")
 else:
-    df_pipeline = pd.DataFrame(st.session_state.pipeline_data)
-    st.dataframe(df_pipeline.iloc[::-1], use_container_width=True, hide_index=True)
+    st.markdown("### 📋 Production Control Console")
+    st.caption("💡 Double-click any cell in the **Status** column to swap steps instantly. Changes save to the system database automatically.")
+    
+    # Sort with newest entries at the absolute top position
+    df_display = df_db.iloc[::-1].copy()
+    
+    # Initialize the data editor console with standard dropdown limits matching your graphic perfectly
+    edited_df = st.data_editor(
+        df_display,
+        use_container_width=True,
+        hide_index=True,
+        disabled=["Project ID", "Timestamp", "Source Language", "Target Language", "Task Type", "CAT Tool(s)", "Volume", "Reference File", "Deadline (IST)", "Budget"],
+        column_config={
+            "Status": st.column_config.SelectboxColumn(
+                "Status",
+                help="Update project completion state matrix",
+                width="large",
+                options=STATUS_OPTIONS,
+                required=True
+            )
+        }
+    )
+    
+    # Check if a PM changed a value, synchronize it, and rewrite it back to the database sheet instantly
+    if not edited_df.equals(df_display):
+        df_original_order = edited_df.iloc[::-1].reset_index(drop=True)
+        save_database(df_original_order)
+        st.toast("💾 Project pipeline status synchronized perfectly!", icon="✅")
+        st.rerun()
