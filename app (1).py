@@ -119,8 +119,6 @@ def load_database():
     if os.path.exists(DB_FILE):
         try:
             df = pd.read_csv(DB_FILE)
-            
-            # Auto-reconciliation to prevent KeyErrors on older structural logs
             if "Client Currency" not in df.columns: df["Client Currency"] = "USD ($)"
             if "Budget Value" not in df.columns: df["Budget Value"] = 0.0
             if "Vendor Cost" not in df.columns: df["Vendor Cost"] = 0.0
@@ -234,14 +232,12 @@ st.markdown(
 )
 
 if len(df_db) > 0:
-    # High-Visibility Full-Width Advanced Filter Expander Panel
     with st.expander("🔍 Search Filters & Board Configurations", expanded=True):
         st.write("Filter tickets down visually across your workflow board columns:")
         search_src = st.multiselect("Filter Source Language", options=LANGUAGES_POOL, key="filter_src")
         search_tgt = st.multiselect("Filter Target Language", options=LANGUAGES_POOL, key="filter_tgt")
         filter_task = st.selectbox("Filter by Task Type", options=["All"] + TASK_TYPE_OPTIONS, key="filter_task_select")
 
-    # Apply database filtering rules safely
     df_filtered = df_db.copy()
     if search_src:
         df_filtered = df_filtered[df_filtered["Source Language"].apply(lambda x: any(l.strip() in [s.strip() for s in str(x).split(",")] for l in search_src))]
@@ -255,9 +251,9 @@ if len(df_db) > 0:
 
     for col_idx, (lane_title, statuses) in enumerate(KANBAN_COLUMNS.items()):
         with board_columns[col_idx]:
-            # Swimlane Title Card Header Layout
+            # 💡 FIX: Explicitly locked color to dark charcoal (#172B4D) so text doesn't turn white
             st.markdown(
-                f"<div style='background-color: #F4F5F7; padding: 10px; border-radius: 5px; font-weight: bold; text-align: center; border-bottom: 3px solid #0052CC; margin-bottom: 15px; min-height: 50px; display: flex; align-items: center; justify-content: center;'>"
+                f"<div style='background-color: #F4F5F7; color: #172B4D; padding: 10px; border-radius: 5px; font-weight: bold; text-align: center; border-bottom: 3px solid #0052CC; margin-bottom: 15px; min-height: 50px; display: flex; align-items: center; justify-content: center;'>"
                 f"{lane_title} ({len(df_filtered[df_filtered['Status'].isin(statuses)])})"
                 f"</div>", 
                 unsafe_allow_html=True
@@ -266,12 +262,11 @@ if len(df_db) > 0:
             df_lane = df_filtered[df_filtered["Status"].isin(statuses)]
             
             if df_lane.empty:
-                st.markdown("<div style='text-align: center; color: #A5ADBA; font-size: 13px; padding: 20px; background-color: #FAFBFC; border: 1px dashed #DFE1E6; border-radius: 4px;'>No tickets here</div>", unsafe_allow_html=True)
+                st.markdown("<div style='text-align: center; color: #7A869A; font-size: 13px; padding: 20px; background-color: #FAFBFC; border: 1px dashed #DFE1E6; border-radius: 4px;'>No tickets here</div>", unsafe_allow_html=True)
             else:
                 for _, task in df_lane.iterrows():
                     pid = task["Project ID"]
                     
-                    # Highlight cards closing inside 24 hours
                     is_urgent = False
                     try:
                         dl_date = datetime.strptime(task["Deadline (IST)"].split(" IST")[0], "%Y-%m-%d %H:%M")
@@ -283,21 +278,20 @@ if len(df_db) > 0:
                     bg_color = "#FFECEC" if is_urgent else "#FFFFFF"
                     urgent_badge = "<span style='background-color: #DE350B; color: white; font-size: 10px; padding: 2px 6px; border-radius: 3px; font-weight: bold;'>URGENT 🚨</span>" if is_urgent else ""
                     
-                    # JIRA Ticket Body Render
+                    # 💡 FIX: Added deep color definitions to all structural string levels to prevent transparent text dropping out
                     st.markdown(
-                        f"<div style='background-color: {bg_color}; padding: 12px; border-radius: 4px; box-shadow: 0 1px 3px rgba(0,0,0,0.12); margin-bottom: 12px; {card_border}'>"
+                        f"<div style='background-color: {bg_color}; color: #172B4D; padding: 12px; border-radius: 4px; box-shadow: 0 1px 3px rgba(0,0,0,0.12); margin-bottom: 12px; {card_border}'>"
                         f"<div style='display: flex; justify-content: space-between; align-items: center;'><strong style='color: #0052CC;'>{pid}</strong>{urgent_badge}</div>"
-                        f"<div style='font-size: 13px; font-weight: bold; margin-top: 4px;'>⚡ {task['Task Type']}</div>"
-                        f"<div style='font-size: 12px; color: #4A4A4A; margin-top: 4px;'>🌐 <b>{task['Source Language']}</b> ➡️ <b>{task['Target Language']}</b></div>"
-                        f"<div style='font-size: 12px; margin-top: 2px;'>📊 Vol: {task['Volume']} | 📂 File: {task['Reference File']}</div>"
-                        f"<div style='font-size: 12px; margin-top: 2px;'>💰 Budget: {task['Budget Display']}</div>"
+                        f"<div style='font-size: 13px; font-weight: bold; margin-top: 4px; color: #172B4D;'>⚡ {task['Task Type']}</div>"
+                        f"<div style='font-size: 12px; color: #42526E; margin-top: 4px;'>🌐 <b>{task['Source Language']}</b> ➡️ <b>{task['Target Language']}</b></div>"
+                        f"<div style='font-size: 12px; margin-top: 2px; color: #42526E;'>📊 Vol: {task['Volume']} | 📂 File: {task['Reference File']}</div>"
+                        f"<div style='font-size: 12px; margin-top: 2px; color: #42526E;'>💰 Budget: {task['Budget Display']}</div>"
                         f"<div style='font-size: 11px; color: #6B778C; margin-top: 6px;'>📅 Due: {task['Deadline (IST)']}</div>"
-                        f"<div style='background-color: #F4F5F7; font-size: 11px; padding: 2px 6px; border-radius: 3px; display: inline-block; margin-top: 6px; color: #42526E;'>📌 Status: {task['Status']}</div>"
+                        f"<div style='background-color: #F4F5F7; font-size: 11px; padding: 2px 6px; border-radius: 3px; display: inline-block; margin-top: 6px; color: #42526E; border: 1px solid #DFE1E6;'>📌 Status: {task['Status']}</div>"
                         f"</div>", 
                         unsafe_allow_html=True
                     )
                     
-                    # VM Team interactive configuration popover block directly attached to ticket footer footprint
                     with st.popover(f"⚙️ Transition: {pid}", use_container_width=True):
                         st.markdown(f"**Manage Workflow State for Ticket: {pid}**")
                         new_status = st.selectbox("Transition Status Option", options=STATUS_OPTIONS, index=STATUS_OPTIONS.index(task["Status"]), key=f"status_{pid}")
