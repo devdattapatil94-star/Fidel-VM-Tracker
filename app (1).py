@@ -7,12 +7,21 @@ from datetime import datetime, timedelta
 # 1. PAGE CONFIGURATION & DATABASE SETUP
 # ==========================================
 st.set_page_config(
-    page_title="VM Production & Pipeline Tracker",
-    page_icon="📊",
+    page_title="Fidel VM Production Board (JIRA Style)",
+    page_icon="⚡",
     layout="wide"
 )
 
 DB_FILE = "pipeline_database.csv"
+
+# Grouping the lifecycle status tracks into JIRA-style Swimlanes
+KANBAN_COLUMNS = {
+    "🎯 Backlog / Not Started": ["Not started", "Pending"],
+    "⏳ In Progress": ["In progress"],
+    "💬 In Discussion": ["In Discussion stage with the PM", "In Discussion stage with the client"],
+    "🚨 Blocked / Delayed": ["Delayed", "No Response received later from the linguist"],
+    "✅ Done": ["Completed", "Cancelled"]
+}
 
 STATUS_OPTIONS = [
     "Not started", "In progress", "Completed", "Cancelled", "Delayed", 
@@ -132,13 +141,12 @@ df_db = load_database()
 # 2. SIDEBAR - PM / SALES INTAKE FORM (LEFT)
 # ==========================================
 with st.sidebar:
-    st.markdown("### 📥 PM / Sales Project Intake")
-    st.write("Use this form to submit upcoming project requirements to the VM pipeline.")
+    st.markdown("### 📥 JIRA Intake Engine")
+    st.write("Submit new project requirements to the production pipeline.")
     st.markdown("---")
     
     src_langs = st.multiselect("Source Language(s) *", options=LANGUAGES_POOL, key="pm_src_langs")
     tgt_langs = st.multiselect("Target Language(s) *", options=LANGUAGES_POOL, key="pm_tgt_langs")
-    
     task_type = st.selectbox("Task Type *", TASK_TYPE_OPTIONS, key="pm_task_type")
     
     cat_options = ["MateCat", "MateSub", "MemoQ", "Phrase", "SDL Trados 2019", "SDL Trados 2021", "SDL Trados 2022", "Similis", "SmartCAT", "Smartling", "Wordfast"]
@@ -153,11 +161,9 @@ with st.sidebar:
     st.markdown("<label style='font-size: 14px;'>Deadline Time (IST) *</label>", unsafe_allow_html=True)
     col_hr, col_min = st.columns(2)
     with col_hr:
-        hours_options = [f"{i:02d}" for i in range(24)]
-        selected_hour = st.selectbox("Hour", options=hours_options, key="pm_hour")
+        selected_hour = st.selectbox("Hour", options=[f"{i:02d}" for i in range(24)], key="pm_hour")
     with col_min:
-        minutes_options = [f"{i:02d}" for i in range(60)]
-        selected_min = st.selectbox("Minute", options=minutes_options, key="pm_min")
+        selected_min = st.selectbox("Minute", options=[f"{i:02d}" for i in range(60)], key="pm_min")
         
     st.markdown("<label style='font-size: 14px;'>Client Budget *</label>", unsafe_allow_html=True)
     col_curr, col_amt = st.columns([0.8, 1.2])
@@ -167,7 +173,7 @@ with st.sidebar:
         budget_val = st.number_input("Amount", min_value=0.000, step=0.001, format="%f", label_visibility="collapsed")
     
     st.markdown(" ")
-    if st.button("Submit to VM Pipeline", use_container_width=True, type="primary"):
+    if st.button("Create JIRA Ticket", use_container_width=True, type="primary"):
         if src_langs and tgt_langs and selected_tools and volume and budget_val > 0:
             src_str = ", ".join(src_langs)
             tgt_str = ", ".join(tgt_langs)
@@ -175,10 +181,7 @@ with st.sidebar:
             formatted_deadline = f"{deadline_date.strftime('%Y-%m-%d')} {selected_hour}:{selected_min} IST"
             
             symbol = currency.split(" ")[1].replace("(", "").replace(")", "")
-            if "JPY" in currency:
-                formatted_budget = f"{symbol}{int(budget_val):,}"
-            else:
-                formatted_budget = f"{symbol}{budget_val:.3f}".rstrip('0').rstrip('.') if budget_val % 0.01 != 0 else f"{symbol}{budget_val:,.2f}"
+            formatted_budget = f"{symbol}{int(budget_val):,}" if "JPY" in currency else f"{symbol}{budget_val:.3f}".rstrip('0').rstrip('.')
             
             file_name_record = ref_file.name if ref_file is not None else "None"
             proj_id = f"FID-{datetime.now().strftime('%m%d%H%M%S')}"
@@ -203,135 +206,115 @@ with st.sidebar:
             
             df_updated = pd.concat([df_db, new_task], ignore_index=True)
             save_database(df_updated)
-            st.success("🎯 Task successfully routed to main production queue.")
+            st.success(f"⚡ Ticket {proj_id} Created Successfully!")
             st.rerun()
-        else:
-            st.error("❌ Form Incomplete. Please check mandatory fields.")
 
 # ==========================================
-# 3. MAIN WORKSPACE - VM PIPELINE ENGINE (RIGHT)
+# 3. MAIN WORKSPACE - JIRA AGILE KANBAN BOARD
 # ==========================================
-col_icon, col_title = st.columns([0.6, 5.4], vertical_alignment="center")
-with col_icon:
-    st.markdown("<div style='background-color:#1E3A8A; padding:12px; border-radius:8px; display:flex; justify-content:center; align-items:center; width:70px; height:70px;'><span style='font-size:38px; color:white;'>📊</span></div>", unsafe_allow_html=True)
-with col_title:
-    st.markdown("<h1 style='margin:0; padding:0; font-size:2.5rem;'>VM Production & Pipeline Tracker</h1>", unsafe_allow_html=True)
-
-st.write("Monitor client pipelines, balance localization project margins, and assign workflow progress tags.")
-st.markdown("---")
+# JIRA Header styling
+st.markdown(
+    "<div style='display: flex; align-items: center; gap: 12px; margin-bottom: 20px;'>"
+    "<div style='background-color: #0052CC; color: white; padding: 10px; border-radius: 4px; font-weight: bold; font-size: 24px;'>⚡</div>"
+    "<div><h2 style='margin: 0; padding: 0;'>Fidel Localization Delivery / Delivery Board</h2>"
+    "<span style='color: #6B778C; font-size: 14px;'>VM Agile Kanban Workspace</span></div>"
+    "</div>", 
+    unsafe_allow_html=True
+)
 
 if len(df_db) > 0:
-    # Live KPI Analytics Cards
-    active_count = len(df_db[df_db["Status"].isin(["Not started", "In progress", "Pending", "Delayed"])])
-    urgent_count = 0
-    now = datetime.now()
-    for dl in df_db["Deadline (IST)"]:
-        try:
-            dl_date = datetime.strptime(dl.split(" IST")[0], "%Y-%m-%d %H:%M")
-            if now <= dl_date <= (now + timedelta(hours=24)):
-                urgent_count += 1
-        except: pass
-
-    usd_tot = df_db[df_db["Client Currency"] == "USD ($)"]["Budget Value"].sum()
-    jpy_tot = df_db[df_db["Client Currency"] == "JPY (¥)"]["Budget Value"].sum()
-    inr_tot = df_db[df_db["Client Currency"] == "INR (₹)"]["Budget Value"].sum()
-
-    kp1, kp2, kp3 = st.columns(3)
-    kp1.metric("Active Queue Pipeline", f"{active_count} Projects")
-    kp2.metric("Urgent Deliveries (24 Hours) 🚨", f"{urgent_count} Tasks")
-    kp3.metric("Total Volume Value", f"${usd_tot:,.2f} | ¥{int(jpy_tot):,} | ₹{inr_tot:,.2f}")
-    
-    st.markdown("---")
-
-    # ------------------------------------------
-    # 🔍 HIGH-VISIBILITY COLLAPSIBLE FILTER PANEL
-    # ------------------------------------------
-    with st.expander("🛠️ Advanced Search & Filter Dashboard Controls", expanded=True):
-        st.write("Use these options to filter down the main workspace table:")
-        
-        # Row 1: Language Multi-selects (Full width for clear, uncut tag visibility)
+    # High-Visibility Advanced Filter Dashboard
+    with st.expander("🔍 Search Filters & Board Configurations", expanded=True):
         search_src = st.multiselect("Filter Source Language", options=LANGUAGES_POOL, key="filter_src")
         search_tgt = st.multiselect("Filter Target Language", options=LANGUAGES_POOL, key="filter_tgt")
-        
-        # Row 2: Selectboxes arranged in a balanced layout grid to provide plenty of text space
-        filter_col1, filter_col2 = st.columns(2)
-        with filter_col1:
-            filter_task = st.selectbox("Filter by Task Type", options=["All"] + TASK_TYPE_OPTIONS, key="filter_task_select")
-        with filter_col2:
-            filter_stat = st.selectbox("Filter by Workspace Status", options=["All"] + STATUS_OPTIONS, key="filter_status_select")
+        filter_task = st.selectbox("Filter by Task Type", options=["All"] + TASK_TYPE_OPTIONS, key="filter_task_select")
 
-    # Apply logical filtering criteria arrays
+    # Apply database filtering rules
     df_filtered = df_db.copy()
-    
     if search_src:
-        df_filtered = df_filtered[df_filtered["Source Language"].apply(lambda x: any(lang.strip() in [s.strip() for s in str(x).split(",")] for lang in search_src))]
+        df_filtered = df_filtered[df_filtered["Source Language"].apply(lambda x: any(l.strip() in [s.strip() for s in str(x).split(",")] for l in search_src))]
     if search_tgt:
-        df_filtered = df_filtered[df_filtered["Target Language"].apply(lambda x: any(lang.strip() in [t.strip() for t in str(x).split(",")] for lang in search_tgt))]
+        df_filtered = df_filtered[df_filtered["Target Language"].apply(lambda x: any(l.strip() in [t.strip() for t in str(x).split(",")] for l in search_tgt))]
     if filter_task != "All":
         df_filtered = df_filtered[df_filtered["Task Type"] == filter_task]
-    if filter_stat != "All":
-        df_filtered = df_filtered[df_filtered["Status"] == filter_stat]
 
-    # Tabbed Views
-    tab_active, tab_archive = st.tabs(["📋 Active Pipeline Workspace", "🗄️ Completed & Performance Archives"])
-    
-    with tab_active:
-        df_active_view = df_filtered[~df_filtered["Status"].isin(["Completed", "Cancelled"])].iloc[::-1].copy()
-        if len(df_active_view) == 0:
-            st.info("No active production allocations match current search criteria.")
-        else:
-            st.caption("💡 **VM Action Console:** Adjust **Vendor Cost** or change **Status** cell mapping tracks. PM fields stay locked down automatically.")
-            
-            edited_active = st.data_editor(
-                df_active_view,
-                use_container_width=True,
-                hide_index=True,
-                disabled=["Project ID", "Timestamp", "Source Language", "Target Language", "Task Type", "CAT Tool(s)", "Volume", "Reference File", "Deadline (IST)", "Budget Display", "Client Currency", "Budget Value", "Gross Profit %"],
-                column_config={
-                    "Status": st.column_config.SelectboxColumn("Status", options=STATUS_OPTIONS, width="large", required=True),
-                    "Vendor Cost": st.column_config.NumberColumn("Vendor Cost", help="Enter localized vendor delivery cost parameters", min_value=0.0, step=0.001, format="%f"),
-                    "Budget Display": "Client Budget",
-                    "Gross Profit %": st.column_config.NumberColumn("Gross Profit %", format="%.1f%%")
-                },
-                key="active_editor"
+    # Render JIRA Board Swimlanes Side-by-Side
+    board_columns = st.columns(len(KANBAN_COLUMNS))
+
+    for col_idx, (lane_title, statuses) in enumerate(KANBAN_COLUMNS.items()):
+        with board_columns[col_idx]:
+            # Swimlane Title Card Header Layout
+            st.markdown(
+                f"<div style='background-color: #F4F5F7; padding: 10px; border-radius: 5px; font-weight: bold; text-align: center; border-bottom: 3px solid #0052CC; margin-bottom: 15px;'>"
+                f"{lane_title} ({len(df_filtered[df_filtered['Status'].isin(statuses)])})"
+                f"</div>", 
+                unsafe_allow_html=True
             )
             
-            if not edited_active.equals(df_active_view):
-                for idx, row in edited_active.iterrows():
-                    p_id = row["Project ID"]
-                    b_val = float(row["Budget Value"])
-                    v_cost = float(row["Vendor Cost"])
+            # Isolate cards matching this lane
+            df_lane = df_filtered[df_filtered["Status"].isin(statuses)]
+            
+            if df_lane.empty:
+                st.markdown("<div style='text-align: center; color: #A5ADBA; font-size: 13px; padding: 20px;'>No issues match</div>", unsafe_allow_html=True)
+            else:
+                for _, task in df_lane.iterrows():
+                    pid = task["Project ID"]
                     
-                    margin = ((b_val - v_cost) / b_val * 100.0) if b_val > 0 else 0.0
-                    edited_active.at[idx, "Gross Profit %"] = margin
+                    # Highlight cards closing inside 24 hours
+                    is_urgent = False
+                    try:
+                        dl_date = datetime.strptime(task["Deadline (IST)"].split(" IST")[0], "%Y-%m-%d %H:%M")
+                        if datetime.now() <= dl_date <= (datetime.now() + timedelta(hours=24)):
+                            is_urgent = True
+                    except: pass
                     
-                    if margin < 40.0 and v_cost > 0:
-                        st.warning(f"⚠️ Margin Alert: Project {p_id} drops below target 40% threshold ({margin:.1f}%)")
+                    card_border = "border-left: 5px solid #DE350B;" if is_urgent else "border-left: 5px solid #4C9AFF;"
+                    bg_color = "#FFECEC" if is_urgent else "#FFFFFF"
+                    urgent_badge = "<span style='background-color: #DE350B; color: white; font-size: 10px; padding: 2px 6px; border-radius: 3px; font-weight: bold;'>URGENT 🚨</span>" if is_urgent else ""
+                    
+                    # JIRA Ticket Component Body Markdown Injection
+                    st.markdown(
+                        f"<div style='background-color: {bg_color}; padding: 12px; border-radius: 4px; box-shadow: 0 1px 3px rgba(0,0,0,0.12); margin-bottom: 12px; {card_border}'>"
+                        f"<div style='display: flex; justify-content: space-between; align-items: center;'><strong style='color: #0052CC;'>{pid}</strong>{urgent_badge}</div>"
+                        f"<div style='font-size: 13px; font-weight: bold; margin-top: 4px;'>⚡ {task['Task Type']}</div>"
+                        f"<div style='font-size: 12px; color: #4A4A4A; margin-top: 4px;'>🌐 <b>{task['Source Language']}</b> ➡️ <b>{task['Target Language']}</b></div>"
+                        f"<div style='font-size: 12px; margin-top: 2px;'>📊 Vol: {task['Volume']} | 📂 File: {task['Reference File']}</div>"
+                        f"<div style='font-size: 12px; margin-top: 2px;'>💰 Budget: {task['Budget Display']}</div>"
+                        f"<div style='font-size: 11px; color: #6B778C; margin-top: 6px;'>📅 Due: {task['Deadline (IST)']}</div>"
+                        f"<div style='background-color: #F4F5F7; font-size: 11px; padding: 2px 6px; border-radius: 3px; display: inline-block; margin-top: 6px; color: #42526E;'>📌 Sub-Status: {task['Status']}</div>"
+                        f"</div>", 
+                        unsafe_allow_html=True
+                    )
+                    
+                    # Interactive VM Control Form right inside the card footprint block
+                    with st.popover(f"⚙️ Action Task: {pid}", use_container_width=True):
+                        st.markdown(f"**Manage Workflow State for Ticket: {pid}**")
+                        new_status = st.selectbox("Transition Status Option", options=STATUS_OPTIONS, index=STATUS_OPTIONS.index(task["Status"]), key=f"status_{pid}")
+                        new_cost = st.number_input("Vendor Cost Input", min_value=0.0, step=0.001, value=float(task["Vendor Cost"]), format="%f", key=f"cost_{pid}")
+                        
+                        if st.button("Apply Status Changes", key=f"btn_{pid}", type="primary"):
+                            df_db.set_index("Project ID", inplace=True)
+                            df_db.at[pid, "Status"] = new_status
+                            df_db.at[pid, "Vendor Cost"] = new_cost
+                            
+                            # Auto margin loop calculate
+                            b_val = float(task["Budget Value"])
+                            df_db.at[pid, "Gross Profit %"] = ((b_val - new_cost) / b_val * 100.0) if b_val > 0 else 0.0
+                            
+                            df_db.reset_index(inplace=True)
+                            save_database(df_db)
+                            st.toast(f"💾 Ticket {pid} details updated successfully!")
+                            st.rerun()
 
-                # Re-align indexes and save
-                df_db.set_index("Project ID", inplace=True)
-                edited_active.set_index("Project ID", inplace=True)
-                df_db.update(edited_active)
-                df_db.reset_index(inplace=True)
-                save_database(df_db)
-                st.rerun()
-
-    with tab_archive:
-        df_archive_view = df_filtered[df_filtered["Status"].isin(["Completed", "Cancelled"])].iloc[::-1].copy()
-        if len(df_archive_view) == 0:
-            st.info("Archive history queue is currently clear.")
-        else:
-            st.dataframe(df_archive_view, use_container_width=True, hide_index=True)
-
-    # Report Exporter
+    # Report Data Exporter System Block
     st.markdown("---")
     csv_report = df_db.to_csv(index=False).encode('utf-8')
     st.download_button(
-        label="📥 Export Master Production Report (CSV)",
+        label="📥 Export Master JIRA Production Report (CSV)",
         data=csv_report,
-        file_name=f"FIDEL_VM_Report_{datetime.now().strftime('%Y%m%d')}.csv",
+        file_name=f"FIDEL_JIRA_Report_{datetime.now().strftime('%Y%m%d')}.csv",
         mime="text/csv",
         type="secondary"
     )
 else:
-    st.info("💡 No active pipeline requirements registered yet. Use the sidebar form to populate tasks into the tracker matrix.")
+    st.info("💡 JIRA board is currently completely clear. Use the intake engine panel on the left to spin up your first ticket issue card!")
