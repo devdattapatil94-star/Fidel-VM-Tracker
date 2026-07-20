@@ -20,6 +20,17 @@ STATUS_OPTIONS = [
     "No Response received later from the linguist", "Pending"
 ]
 
+TASK_TYPE_OPTIONS = [
+    "AI Voice-Over", "Audio Content Check", "Audio Data Collection", 
+    "Back Translation (Chars)", "Back Translation (Words)", "Closed Captioning", 
+    "Data Annotation", "Data Collection", "Desktop Publishing", "Editing", 
+    "Evaluation", "Interpretation", "Machine Translation and Full Post-Editing", 
+    "Machine Translation and Light Post-Editing", "Post-Editing", "Proofreading", 
+    "Review", "Revision", "Subtitle Integration", "Subtitling", 
+    "TEP (Translation, Editing & Proofreading)", "Transcreation", 
+    "Transcription", "Translation", "Voice-Over"
+]
+
 LANGUAGES_POOL = [
     "Afar", "Afrikaans (South Africa)", "Ahrani", "Akan", "Akha", "Albanian", "Amharic", 
     "Ancient Greek", "Arabic", "Arabic (Egypt)", "Arabic (Oman)", "Arabic (Algeria)", 
@@ -99,7 +110,6 @@ def load_database():
     if os.path.exists(DB_FILE):
         try:
             df = pd.read_csv(DB_FILE)
-            # Support margin metrics configuration structures back-compatibly
             if "Client Currency" not in df.columns: df["Client Currency"] = "USD ($)"
             if "Budget Value" not in df.columns: df["Budget Value"] = 0.0
             if "Vendor Cost" not in df.columns: df["Vendor Cost"] = 0.0
@@ -126,19 +136,10 @@ with st.sidebar:
     st.write("Use this form to submit upcoming project requirements to the VM pipeline.")
     st.markdown("---")
     
-    src_langs = st.multiselect("Source Language(s) *", options=LANGUAGES_POOL)
-    tgt_langs = st.multiselect("Target Language(s) *", options=LANGUAGES_POOL)
+    src_langs = st.multiselect("Source Language(s) *", options=LANGUAGES_POOL, key="pm_src_langs")
+    tgt_langs = st.multiselect("Target Language(s) *", options=LANGUAGES_POOL, key="pm_tgt_langs")
     
-    task_type = st.selectbox("Task Type *", [
-        "AI Voice-Over", "Audio Content Check", "Audio Data Collection", 
-        "Back Translation (Chars)", "Back Translation (Words)", "Closed Captioning", 
-        "Data Annotation", "Data Collection", "Desktop Publishing", "Editing", 
-        "Evaluation", "Interpretation", "Machine Translation and Full Post-Editing", 
-        "Machine Translation and Light Post-Editing", "Post-Editing", "Proofreading", 
-        "Review", "Revision", "Subtitle Integration", "Subtitling", 
-        "TEP (Translation, Editing & Proofreading)", "Transcreation", 
-        "Transcription", "Translation", "Voice-Over"
-    ])
+    task_type = st.selectbox("Task Type *", TASK_TYPE_OPTIONS, key="pm_task_type")
     
     cat_options = ["MateCat", "MateSub", "MemoQ", "Phrase", "SDL Trados 2019", "SDL Trados 2021", "SDL Trados 2022", "Similis", "SmartCAT", "Smartling", "Wordfast"]
     selected_tools = st.multiselect("Client CAT Tool *", options=cat_options)
@@ -153,10 +154,10 @@ with st.sidebar:
     col_hr, col_min = st.columns(2)
     with col_hr:
         hours_options = [f"{i:02d}" for i in range(24)]
-        selected_hour = st.selectbox("Hour", options=hours_options)
+        selected_hour = st.selectbox("Hour", options=hours_options, key="pm_hour")
     with col_min:
         minutes_options = [f"{i:02d}" for i in range(60)]
-        selected_min = st.selectbox("Minute", options=minutes_options)
+        selected_min = st.selectbox("Minute", options=minutes_options, key="pm_min")
         
     st.markdown("<label style='font-size: 14px;'>Client Budget *</label>", unsafe_allow_html=True)
     col_curr, col_amt = st.columns([0.8, 1.2])
@@ -210,7 +211,6 @@ with st.sidebar:
 # ==========================================
 # 3. MAIN WORKSPACE - VM PIPELINE ENGINE (RIGHT)
 # ==========================================
-# Header banner assembly
 col_icon, col_title = st.columns([0.6, 5.4], vertical_alignment="center")
 with col_icon:
     st.markdown("<div style='background-color:#1E3A8A; padding:12px; border-radius:8px; display:flex; justify-content:center; align-items:center; width:70px; height:70px;'><span style='font-size:38px; color:white;'>📊</span></div>", unsafe_allow_html=True)
@@ -221,12 +221,8 @@ st.write("Monitor client pipelines, balance localization project margins, and as
 st.markdown("---")
 
 if len(df_db) > 0:
-    # ------------------------------------------
-    # 📊 FEATURE 1: INTERACTIVE SUMMARY KPI CARDS
-    # ------------------------------------------
+    # Live KPI Analytics Cards
     active_count = len(df_db[df_db["Status"].isin(["Not started", "In progress", "Pending", "Delayed"])])
-    
-    # Calculate urgent timelines expiring within 24 hours
     urgent_count = 0
     now = datetime.now()
     for dl in df_db["Deadline (IST)"]:
@@ -236,7 +232,6 @@ if len(df_db) > 0:
                 urgent_count += 1
         except: pass
 
-    # Budget financial aggregation groupings
     usd_tot = df_db[df_db["Client Currency"] == "USD ($)"]["Budget Value"].sum()
     jpy_tot = df_db[df_db["Client Currency"] == "JPY (¥)"]["Budget Value"].sum()
     inr_tot = df_db[df_db["Client Currency"] == "INR (₹)"]["Budget Value"].sum()
@@ -249,39 +244,44 @@ if len(df_db) > 0:
     st.markdown("---")
 
     # ------------------------------------------
-    # 🔍 FEATURE 2: ADVANCED FILTERS
+    # 🔍 REFACTORED MULTI-FILTER COMPONENT BAR
     # ------------------------------------------
     st.markdown("##### 🛠️ Pipeline Search Filters")
-    f_col1, f_col2, f_col3 = st.columns(3)
+    f_col1, f_col2, f_col3, f_col4 = st.columns([1.2, 1.2, 1.0, 0.8])
+    
     with f_col1:
-        search_lang = st.text_input("Search by Language Pair", placeholder="e.g. Japanese")
+        search_src = st.multiselect("Filter Source Language", options=LANGUAGES_POOL, key="filter_src")
     with f_col2:
-        filter_task = st.selectbox("Filter by Task Type", options=["All"] + sorted(list(df_db["Task Type"].unique())))
+        search_tgt = st.multiselect("Filter Target Language", options=LANGUAGES_POOL, key="filter_tgt")
     with f_col3:
-        filter_stat = st.selectbox("Filter by Workspace Status", options=["All"] + STATUS_OPTIONS)
+        filter_task = st.selectbox("Filter by Task Type", options=["All"] + TASK_TYPE_OPTIONS, key="filter_task_select")
+    with f_col4:
+        filter_stat = st.selectbox("Filter by Workspace Status", options=["All"] + STATUS_OPTIONS, key="filter_status_select")
 
-    # Execute dynamic matrix pipeline filtering
+    # Apply logical filtering criteria arrays
     df_filtered = df_db.copy()
-    if search_lang:
-        df_filtered = df_filtered[df_filtered["Source Language"].str.contains(search_lang, case=False) | df_filtered["Target Language"].str.contains(search_lang, case=False)]
+    
+    if search_src:
+        # Check if row's comma-separated source languages overlap with selections
+        df_filtered = df_filtered[df_filtered["Source Language"].apply(lambda x: any(lang.strip() in [s.strip() for s in str(x).split(",")] for lang in search_src))]
+    if search_tgt:
+        # Check if row's comma-separated target languages overlap with selections
+        df_filtered = df_filtered[df_filtered["Target Language"].apply(lambda x: any(lang.strip() in [t.strip() for t in str(x).split(",")] for lang in search_tgt))]
     if filter_task != "All":
         df_filtered = df_filtered[df_filtered["Task Type"] == filter_task]
     if filter_stat != "All":
         df_filtered = df_filtered[df_filtered["Status"] == filter_stat]
 
-    # ------------------------------------------
-    # 🗂️ FEATURE 3: TABBED VIEW LAYOUTS (ACTIVE vs ARCHIVE)
-    # ------------------------------------------
+    # Tabbed Views
     tab_active, tab_archive = st.tabs(["📋 Active Pipeline Workspace", "🗄️ Completed & Performance Archives"])
     
     with tab_active:
-        df_active_view = df_filtered[~df_filtered["Status"].isin(["Completed", "Cancelled"])]
+        df_active_view = df_filtered[~df_filtered["Status"].isin(["Completed", "Cancelled"])].iloc[::-1].copy()
         if len(df_active_view) == 0:
-            st.info("No active production allocations matches current search criteria.")
+            st.info("No active production allocations match current search criteria.")
         else:
             st.caption("💡 **VM Action Console:** Adjust **Vendor Cost** or change **Status** cell mapping tracks. PM fields stay locked down automatically.")
             
-            # Form configuration schema arrays matching your custom visual goals
             edited_active = st.data_editor(
                 df_active_view,
                 use_container_width=True,
@@ -292,10 +292,10 @@ if len(df_db) > 0:
                     "Vendor Cost": st.column_config.NumberColumn("Vendor Cost", help="Enter localized vendor delivery cost parameters", min_value=0.0, step=0.001, format="%f"),
                     "Budget Display": "Client Budget",
                     "Gross Profit %": st.column_config.NumberColumn("Gross Profit %", format="%.1f%%")
-                }
+                },
+                key="active_editor"
             )
             
-            # Recalculate financial margin health limits dynamically
             if not edited_active.equals(df_active_view):
                 for idx, row in edited_active.iterrows():
                     p_id = row["Project ID"]
@@ -305,11 +305,10 @@ if len(df_db) > 0:
                     margin = ((b_val - v_cost) / b_val * 100.0) if b_val > 0 else 0.0
                     edited_active.at[idx, "Gross Profit %"] = margin
                     
-                    # Target color coding logic exceptions alerts
                     if margin < 40.0 and v_cost > 0:
                         st.warning(f"⚠️ Margin Alert: Project {p_id} drops below target 40% threshold ({margin:.1f}%)")
 
-                # Synchronize changes straight into CSV storage matrix blocks
+                # Re-align indexes and save
                 df_db.set_index("Project ID", inplace=True)
                 edited_active.set_index("Project ID", inplace=True)
                 df_db.update(edited_active)
@@ -318,15 +317,13 @@ if len(df_db) > 0:
                 st.rerun()
 
     with tab_archive:
-        df_archive_view = df_filtered[df_filtered["Status"].isin(["Completed", "Cancelled"])]
+        df_archive_view = df_filtered[df_filtered["Status"].isin(["Completed", "Cancelled"])].iloc[::-1].copy()
         if len(df_archive_view) == 0:
             st.info("Archive history queue is currently clear.")
         else:
             st.dataframe(df_archive_view, use_container_width=True, hide_index=True)
 
-    # ------------------------------------------
-    # 📤 FEATURE 4: REPORT EXPORTER
-    # ------------------------------------------
+    # Report Exporter
     st.markdown("---")
     csv_report = df_db.to_csv(index=False).encode('utf-8')
     st.download_button(
