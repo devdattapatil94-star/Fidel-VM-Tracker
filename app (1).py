@@ -99,9 +99,9 @@ with st.sidebar:
     st.write("Use this form to submit upcoming project requirements to the VM pipeline.")
     st.markdown("---")
     
-    # Reworked language field selectors using your structural pool arrays
-    src_langs = st.multiselect("Source Language(s) *", OPTIONS=LANGUAGES_POOL)
-    tgt_langs = st.multiselect("Target Language(s) *", OPTIONS=LANGUAGES_POOL)
+    # Corrected keyword argument to lowercase options
+    src_langs = st.multiselect("Source Language(s) *", options=LANGUAGES_POOL)
+    tgt_langs = st.multiselect("Target Language(s) *", options=LANGUAGES_POOL)
     
     task_type = st.selectbox("Task Type *", [
         "Translation", "Editing", "Proofreading", "Review", "Revision", 
@@ -116,7 +116,6 @@ with st.sidebar:
     st.markdown(" ")
     if st.button("Submit to VM Pipeline", use_container_width=True, type="primary"):
         if src_langs and tgt_langs and volume and budget > 0:
-            # Format display layout metrics cleanly
             src_str = ", ".join(src_langs)
             tgt_str = ", ".join(tgt_langs)
             
@@ -133,12 +132,11 @@ with st.sidebar:
             st.session_state.pipeline_data.append(new_task)
             st.success("🎯 Task successfully routed to main production queue.")
         else:
-            st.error("❌ Form Incomplete. Please specify languages, volume, and structural allocation metrics.")
+            st.error("❌ Form Incomplete. Please specify languages, volume, and budget metrics.")
 
 # ==========================================
 # 3. MAIN DASHBOARD FRAME DISPLAY LAYER
 # ==========================================
-# Header banner assembly matching your exact icon block
 col_icon, col_title = st.columns([0.6, 5.4], vertical_alignment="center")
 with col_icon:
     st.markdown(
@@ -153,10 +151,8 @@ with col_title:
 st.write("Track active localization workflows, monitor client budgets against vendor rates, and manage execution states seamlessly.")
 st.markdown("---")
 
-# Conditional tracking row matrix generation pad
 if len(st.session_state.pipeline_data) == 0:
     st.info("💡 No active pipeline requirements registered yet. Use the sidebar form to populate tasks into the tracker matrix.")
 else:
     df_pipeline = pd.DataFrame(st.session_state.pipeline_data)
-    # Reverse column sorting layout hierarchy logic to display newest drops first
     st.dataframe(df_pipeline.iloc[::-1], use_container_width=True, hide_index=True)
