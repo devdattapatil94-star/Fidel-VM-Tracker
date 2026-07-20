@@ -80,7 +80,7 @@ LANGUAGES_POOL = [
     "Somali", "Sorbian (Lower)", "Sorbian (Upper)", "Sotho", "Spanish (Argentina)", "Spanish (Bolivia)", 
     "Spanish (Chile)", "Spanish (Colombia)", "Spanish (Costa Rica)", "Spanish (Cuba)", 
     "Spanish (Dominican Republic)", "Spanish (Ecuador)", "Spanish (El Salvador)", "Spanish (Guatemala)", 
-    "Honduras", "Spanish (Latin America)", "Spanish (Mexico)", "Spanish (Nicaragua)", 
+    "Spanish (Honduras)", "Spanish (Latin America)", "Spanish (Mexico)", "Spanish (Nicaragua)", 
     "Spanish (Panama)", "Spanish (Paraguay)", "Spanish (Spain)", "Spanish (USA)", "Sundanese (SU)", 
     "Swahili (Burundi)", "Swahili (Kenya)", "Swahili (Rwanda)", "Swahili (Tanzania)", "Swahili (Uganda)", 
     "Swedish", "Sylheti (SYL)", "Syriac", "Tagalog (TL)", "Tai Dam (Vietnam)", "Tajik (TG)", 
@@ -113,6 +113,14 @@ with st.sidebar:
         "Transcription", "Translation", "Voice-Over"
     ])
     
+    # Matching tool pool items from your onboarding setup
+    cat_options = [
+        "MateCat", "MateSub", "MemoQ", "Phrase", "SDL Trados 2019", 
+        "SDL Trados 2021", "SDL Trados 2022", "Similis", "SmartCAT", 
+        "Smartling", "Wordfast"
+    ]
+    selected_tools = st.multiselect("Client CAT Tool *", options=cat_options)
+    
     volume = st.text_input("Volume (Words / Minutes) *", placeholder="e.g., 5000 words")
     
     st.markdown("<label style='font-size: 14px;'>Client Deadline Date *</label>", unsafe_allow_html=True)
@@ -127,7 +135,6 @@ with st.sidebar:
         minutes_options = [f"{i:02d}" for i in range(60)]
         selected_min = st.selectbox("Minute", options=minutes_options)
         
-    # Currency and Budget dual input components layout block
     st.markdown("<label style='font-size: 14px;'>Client Budget *</label>", unsafe_allow_html=True)
     col_curr, col_amt = st.columns([0.8, 1.2])
     with col_curr:
@@ -137,12 +144,12 @@ with st.sidebar:
     
     st.markdown(" ")
     if st.button("Submit to VM Pipeline", use_container_width=True, type="primary"):
-        if src_langs and tgt_langs and volume and budget_val > 0:
+        if src_langs and tgt_langs and selected_tools and volume and budget_val > 0:
             src_str = ", ".join(src_langs)
             tgt_str = ", ".join(tgt_langs)
+            tools_str = ", ".join(selected_tools)
             formatted_deadline = f"{deadline_date.strftime('%Y-%m-%d')} {selected_hour}:{selected_min} IST"
             
-            # Extract clean symbol formatting markers
             symbol = currency.split(" ")[1].replace("(", "").replace(")", "")
             formatted_budget = f"{symbol}{budget_val:,.2f}" if "JPY" not in currency else f"{symbol}{int(budget_val):,}"
             
@@ -151,6 +158,7 @@ with st.sidebar:
                 "Source Language": src_str,
                 "Target Language": tgt_str,
                 "Task Type": task_type,
+                "CAT Tool(s)": tools_str,
                 "Volume": volume,
                 "Deadline (IST)": formatted_deadline,
                 "Budget": formatted_budget,
@@ -159,7 +167,7 @@ with st.sidebar:
             st.session_state.pipeline_data.append(new_task)
             st.success("🎯 Task successfully routed to main production queue.")
         else:
-            st.error("❌ Form Incomplete. Please specify languages, volume, and budget metrics.")
+            st.error("❌ Form Incomplete. Please specify languages, tools, volume, and budget metrics.")
 
 # ==========================================
 # 3. MAIN DASHBOARD FRAME DISPLAY LAYER
