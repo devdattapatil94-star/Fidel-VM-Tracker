@@ -1,5 +1,5 @@
-import streamlit st
-import pandas pd
+import streamlit as st
+import pandas as pd
 from datetime import datetime
 
 # ==========================================
@@ -102,7 +102,7 @@ with st.sidebar:
     src_langs = st.multiselect("Source Language(s) *", options=LANGUAGES_POOL)
     tgt_langs = st.multiselect("Target Language(s) *", options=LANGUAGES_POOL)
     
-    # Swapped list array to match exact custom production workflow entries
+    # TEP option appended clearly into the main task workflow select array
     task_type = st.selectbox("Task Type *", [
         "AI Voice-Over", "Audio Content Check", "Audio Data Collection", 
         "Back Translation (Chars)", "Back Translation (Words)", "Closed Captioning", 
@@ -110,7 +110,8 @@ with st.sidebar:
         "Evaluation", "Interpretation", "Machine Translation and Full Post-Editing", 
         "Machine Translation and Light Post-Editing", "Post-Editing", "Proofreading", 
         "Review", "Revision", "Subtitle Integration", "Subtitling", 
-        "Transcreation", "Transcription", "Translation", "Voice-Over"
+        "TEP (Translation, Editing & Proofreading)", "Transcreation", 
+        "Transcription", "Translation", "Voice-Over"
     ])
     
     volume = st.text_input("Volume (Words / Minutes) *", placeholder="e.g., 5000 words")
