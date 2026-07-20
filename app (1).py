@@ -7,21 +7,12 @@ from datetime import datetime, timedelta
 # 1. PAGE CONFIGURATION & DATABASE SETUP
 # ==========================================
 st.set_page_config(
-    page_title="Fidel VM Production Board (JIRA Style)",
-    page_icon="⚡",
+    page_title="VM Production Control Deck",
+    page_icon="💎",
     layout="wide"
 )
 
 DB_FILE = "pipeline_database.csv"
-
-# Grouping the lifecycle status tracks into JIRA-style Swimlanes
-KANBAN_COLUMNS = {
-    "🎯 Backlog / Not Started": ["Not started", "Pending"],
-    "⏳ In Progress": ["In progress"],
-    "💬 In Discussion": ["In Discussion stage with the PM", "In Discussion stage with the client"],
-    "🚨 Blocked / Delayed": ["Delayed", "No Response received later from the linguist"],
-    "✅ Done": ["Completed", "Cancelled"]
-}
 
 STATUS_OPTIONS = [
     "Not started", "In progress", "Completed", "Cancelled", "Delayed", 
@@ -146,8 +137,8 @@ df_db = load_database()
 # 2. SIDEBAR - PM / SALES INTAKE FORM (LEFT)
 # ==========================================
 with st.sidebar:
-    st.markdown("### 📥 JIRA Intake Engine")
-    st.write("Submit new project requirements to the production pipeline.")
+    st.markdown("### 📥 Project Intake Panel")
+    st.write("Route new project specs directly into the primary production deck.")
     st.markdown("---")
     
     src_langs = st.multiselect("Source Language(s) *", options=LANGUAGES_POOL, key="pm_src_langs")
@@ -178,7 +169,7 @@ with st.sidebar:
         budget_val = st.number_input("Amount", min_value=0.000, step=0.001, format="%f", label_visibility="collapsed")
     
     st.markdown(" ")
-    if st.button("Create JIRA Ticket", use_container_width=True, type="primary"):
+    if st.button("Log to Production Deck", use_container_width=True, type="primary"):
         if src_langs and tgt_langs and selected_tools and volume and budget_val > 0:
             src_str = ", ".join(src_langs)
             tgt_str = ", ".join(tgt_langs)
@@ -214,111 +205,141 @@ with st.sidebar:
             
             df_updated = pd.concat([df_db, new_task], ignore_index=True)
             save_database(df_updated)
-            st.success(f"⚡ Ticket {proj_id} Created Successfully!")
+            st.success(f"🚀 Project {proj_id} registered successfully!")
             st.rerun()
         else:
             st.error("❌ Form Incomplete. Please check mandatory fields.")
 
 # ==========================================
-# 3. MAIN WORKSPACE - JIRA AGILE KANBAN BOARD
+# 3. MAIN WORKSPACE - PRODUCTION CONTROL DECK
 # ==========================================
 st.markdown(
-    "<div style='display: flex; align-items: center; gap: 12px; margin-bottom: 20px;'>"
-    "<div style='background-color: #0052CC; color: white; padding: 10px; border-radius: 4px; font-weight: bold; font-size: 24px;'>⚡</div>"
-    "<div><h2 style='margin: 0; padding: 0;'>Fidel Localization Delivery / Delivery Board</h2>"
-    "<span style='color: #6B778C; font-size: 14px;'>VM Agile Kanban Workspace</span></div>"
+    "<div style='display: flex; align-items: center; gap: 12px; margin-bottom: 5px;'>"
+    "<div style='background-color: #0F172A; color: white; padding: 10px; border-radius: 6px; font-weight: bold; font-size: 22px;'>💎</div>"
+    "<div><h2 style='margin: 0; padding: 0; color: #0F172A;'>VM Production Control Deck</h2>"
+    "<span style='color: #475569; font-size: 14px;'>Minimalist Streamlined Workflow Center</span></div>"
     "</div>", 
     unsafe_allow_html=True
 )
+st.markdown("---")
 
 if len(df_db) > 0:
-    with st.expander("🔍 Search Filters & Board Configurations", expanded=True):
-        st.write("Filter tickets down visually across your workflow board columns:")
-        search_src = st.multiselect("Filter Source Language", options=LANGUAGES_POOL, key="filter_src")
-        search_tgt = st.multiselect("Filter Target Language", options=LANGUAGES_POOL, key="filter_tgt")
-        filter_task = st.selectbox("Filter by Task Type", options=["All"] + TASK_TYPE_OPTIONS, key="filter_task_select")
+    # Top Metrics Bar
+    active_count = len(df_db[df_db["Status"].isin(["Not started", "In progress", "Pending", "Delayed"])])
+    usd_tot = df_db[df_db["Client Currency"] == "USD ($)"]["Budget Value"].sum()
+    jpy_tot = df_db[df_db["Client Currency"] == "JPY (¥)"]["Budget Value"].sum()
+    inr_tot = df_db[df_db["Client Currency"] == "INR (₹)"]["Budget Value"].sum()
 
+    m1, m2, m3 = st.columns(3)
+    m1.metric("Active Run Track", f"{active_count} Production Projects")
+    m2.metric("Total Operational Value", f"${usd_tot:,.2f} USD | ¥{int(jpy_tot):,} JPY")
+    m3.metric("Total INR Value", f"₹{inr_tot:,.2f} INR")
+    
+    st.markdown("---")
+
+    # High-Visibility Filter Bar
+    with st.expander("🔍 Filter & Isolate Projects", expanded=True):
+        f_src = st.multiselect("Filter Source Language", options=LANGUAGES_POOL)
+        f_tgt = st.multiselect("Filter Target Language", options=LANGUAGES_POOL)
+        c1, c2 = st.columns(2)
+        with c1:
+            f_task = st.selectbox("Filter by Task Type", options=["All Tasks"] + TASK_TYPE_OPTIONS)
+        with c2:
+            f_status = st.selectbox("Filter by Workspace Status", options=["All Statuses"] + STATUS_OPTIONS)
+
+    # Filter Database
     df_filtered = df_db.copy()
-    if search_src:
-        df_filtered = df_filtered[df_filtered["Source Language"].apply(lambda x: any(l.strip() in [s.strip() for s in str(x).split(",")] for l in search_src))]
-    if search_tgt:
-        df_filtered = df_filtered[df_filtered["Target Language"].apply(lambda x: any(l.strip() in [t.strip() for t in str(x).split(",")] for l in search_tgt))]
-    if filter_task != "All":
-        df_filtered = df_filtered[df_filtered["Task Type"] == filter_task]
+    if f_src:
+        df_filtered = df_filtered[df_filtered["Source Language"].apply(lambda x: any(l.strip() in [s.strip() for s in str(x).split(",")] for l in f_src))]
+    if f_tgt:
+        df_filtered = df_filtered[df_filtered["Target Language"].apply(lambda x: any(l.strip() in [t.strip() for t in str(x).split(",")] for l in f_tgt))]
+    if f_task != "All Tasks":
+        df_filtered = df_filtered[df_filtered["Task Type"] == f_task]
+    if f_status != "All Statuses":
+        df_filtered = df_filtered[df_filtered["Status"] == f_status]
 
-    # Render JIRA Kanban Board Swimlanes Side-by-Side
-    board_columns = st.columns(len(KANBAN_COLUMNS))
+    st.markdown(f"##### 📑 Active Batches ({len(df_filtered)} items matched)")
 
-    for col_idx, (lane_title, statuses) in enumerate(KANBAN_COLUMNS.items()):
-        with board_columns[col_idx]:
-            # 💡 FIX: Explicitly locked color to dark charcoal (#172B4D) so text doesn't turn white
+    # Render Expanded List Rows
+    if df_filtered.empty:
+        st.info("No projects match the selected active filter array configuration parameters.")
+    else:
+        for _, row in df_filtered.iloc[::-1].iterrows():
+            pid = row["Project ID"]
+            status_text = row["Status"]
+            
+            # Smart Color Badge Assignment Logic maps
+            status_bg = "#E2E8F0"
+            status_fg = "#334155"
+            if status_text in ["In progress"]: status_bg, status_fg = "#FEF3C7", "#D97706"
+            elif status_text in ["Completed"]: status_bg, status_fg = "#D1E7DD", "#0F5132"
+            elif status_text in ["Delayed", "Pending"]: status_bg, status_fg = "#F8D7DA", "#842029"
+            elif status_text.startswith("In Discussion"): status_bg, status_fg = "#E8DEF8", "#21005D"
+
+            # Check for high-urgency timeline parameters
+            is_urgent = False
+            try:
+                dl_date = datetime.strptime(row["Deadline (IST)"].split(" IST")[0], "%Y-%m-%d %H:%M")
+                if datetime.now() <= dl_date <= (datetime.now() + timedelta(hours=24)):
+                    is_urgent = True
+            except: pass
+            
+            border_style = "border-left: 6px solid #EF4444; background-color: #FFF5F5;" if is_urgent else "border-left: 6px solid #475569; background-color: #FFFFFF;"
+            urgent_tag = "<span style='background-color: #EF4444; color: white; padding: 2px 6px; border-radius: 4px; font-size: 11px; font-weight: bold; margin-left: 10px;'>🚨 URGENT</span>" if is_urgent else ""
+
+            # Master Row Blueprint
             st.markdown(
-                f"<div style='background-color: #F4F5F7; color: #172B4D; padding: 10px; border-radius: 5px; font-weight: bold; text-align: center; border-bottom: 3px solid #0052CC; margin-bottom: 15px; min-height: 50px; display: flex; align-items: center; justify-content: center;'>"
-                f"{lane_title} ({len(df_filtered[df_filtered['Status'].isin(statuses)])})"
-                f"</div>", 
+                f"<div style='padding: 18px; border-radius: 8px; box-shadow: 0 1px 4px rgba(0,0,0,0.06); margin-bottom: 12px; {border_style} border-top: 1px solid #E2E8F0; border-right: 1px solid #E2E8F0; border-bottom: 1px solid #E2E8F0;'>"
+                f"  <div style='display: flex; justify-content: space-between; align-items: center; border-bottom: 1px dashed #E2E8F0; padding-bottom: 8px; margin-bottom: 10px;'>"
+                f"      <div><span style='font-size: 16px; font-weight: bold; color: #0F172A;'>📌 ID: {pid}</span>{urgent_tag}</div>"
+                f"      <div style='background-color: {status_bg}; color: {status_fg}; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: bold;'>{status_text}</div>"
+                f"  </div>"
+                f"  <div style='display: flex; flex-wrap: wrap; gap: 24px; color: #334155; font-size: 13.5px;'>"
+                f"      <div style='flex: 1; min-width: 250px;'><b>🌐 Lang Pair:</b> {row['Source Language']} ➡️ {row['Target Language']}</div>"
+                f"      <div style='flex: 1; min-width: 18px;'><b>⚡ Task:</b> {row['Task Type']}</div>"
+                f"      <div style='flex: 1; min-width: 120px;'><b>📊 Volume:</b> {row['Volume']}</div>"
+                f"  </div>"
+                f"  <div style='display: flex; flex-wrap: wrap; gap: 24px; color: #334155; font-size: 13.5px; margin-top: 8px;'>"
+                f"      <div style='flex: 1; min-width: 250px;'><b>📅 Deadline (IST):</b> {row['Deadline (IST)']}</div>"
+                f"      <div style='flex: 1; min-width: 18px;'><b>💰 Client Budget:</b> {row['Budget Display']}</div>"
+                f"      <div style='flex: 1; min-width: 120px;'><b>📂 Ref File:</b> <span style='color: #475569; font-family: monospace;'>{row['Reference File']}</span></div>"
+                f"  </div>"
+                f"  <div style='display: flex; flex-wrap: wrap; gap: 24px; color: #334155; font-size: 13.5px; margin-top: 8px; background-color: #F8FAFC; padding: 6px 12px; border-radius: 4px; border: 1px solid #F1F5F9;'>"
+                f"      <div><b>💵 Assigned Vendor Cost:</b> {row['Client Currency'].split(' ')[1].replace('(','').replace(')','')}{row['Vendor Cost']:.3f}</div>"
+                f"      <div><b>📈 Est. Gross Margin:</b> <span style='font-weight: bold; color: " + ("#16A34A" if float(row['Gross Profit %']) >= 40.0 else "#DC2626") + f";'>{row['Gross Profit %']:.1f}%</span></div>"
+                f"  </div>"
+                f"</div>",
                 unsafe_allow_html=True
             )
             
-            df_lane = df_filtered[df_filtered["Status"].isin(statuses)]
-            
-            if df_lane.empty:
-                st.markdown("<div style='text-align: center; color: #7A869A; font-size: 13px; padding: 20px; background-color: #FAFBFC; border: 1px dashed #DFE1E6; border-radius: 4px;'>No tickets here</div>", unsafe_allow_html=True)
-            else:
-                for _, task in df_lane.iterrows():
-                    pid = task["Project ID"]
+            # Popover controller stacked natively under row footers perfectly
+            with st.popover(f"⚙️ Update Operations: {pid}", use_container_width=True):
+                st.markdown(f"**Execution Panel for {pid}**")
+                new_status = st.selectbox("Update Progress Track", options=STATUS_OPTIONS, index=STATUS_OPTIONS.index(status_text), key=f"stat_deck_{pid}")
+                new_cost = st.number_input("Log Vendor Payout Cost", min_value=0.0, step=0.001, value=float(row["Vendor Cost"]), format="%f", key=f"cost_deck_{pid}")
+                
+                if st.button("Commit Operational Updates", key=f"btn_deck_{pid}", type="primary"):
+                    df_db.set_index("Project ID", inplace=True)
+                    df_db.at[pid, "Status"] = new_status
+                    df_db.at[pid, "Vendor Cost"] = new_cost
                     
-                    is_urgent = False
-                    try:
-                        dl_date = datetime.strptime(task["Deadline (IST)"].split(" IST")[0], "%Y-%m-%d %H:%M")
-                        if datetime.now() <= dl_date <= (datetime.now() + timedelta(hours=24)):
-                            is_urgent = True
-                    except: pass
+                    b_val = float(row["Budget Value"])
+                    df_db.at[pid, "Gross Profit %"] = ((b_val - new_cost) / b_val * 100.0) if b_val > 0 else 0.0
                     
-                    card_border = "border-left: 5px solid #DE350B;" if is_urgent else "border-left: 5px solid #4C9AFF;"
-                    bg_color = "#FFECEC" if is_urgent else "#FFFFFF"
-                    urgent_badge = "<span style='background-color: #DE350B; color: white; font-size: 10px; padding: 2px 6px; border-radius: 3px; font-weight: bold;'>URGENT 🚨</span>" if is_urgent else ""
-                    
-                    # 💡 FIX: Added deep color definitions to all structural string levels to prevent transparent text dropping out
-                    st.markdown(
-                        f"<div style='background-color: {bg_color}; color: #172B4D; padding: 12px; border-radius: 4px; box-shadow: 0 1px 3px rgba(0,0,0,0.12); margin-bottom: 12px; {card_border}'>"
-                        f"<div style='display: flex; justify-content: space-between; align-items: center;'><strong style='color: #0052CC;'>{pid}</strong>{urgent_badge}</div>"
-                        f"<div style='font-size: 13px; font-weight: bold; margin-top: 4px; color: #172B4D;'>⚡ {task['Task Type']}</div>"
-                        f"<div style='font-size: 12px; color: #42526E; margin-top: 4px;'>🌐 <b>{task['Source Language']}</b> ➡️ <b>{task['Target Language']}</b></div>"
-                        f"<div style='font-size: 12px; margin-top: 2px; color: #42526E;'>📊 Vol: {task['Volume']} | 📂 File: {task['Reference File']}</div>"
-                        f"<div style='font-size: 12px; margin-top: 2px; color: #42526E;'>💰 Budget: {task['Budget Display']}</div>"
-                        f"<div style='font-size: 11px; color: #6B778C; margin-top: 6px;'>📅 Due: {task['Deadline (IST)']}</div>"
-                        f"<div style='background-color: #F4F5F7; font-size: 11px; padding: 2px 6px; border-radius: 3px; display: inline-block; margin-top: 6px; color: #42526E; border: 1px solid #DFE1E6;'>📌 Status: {task['Status']}</div>"
-                        f"</div>", 
-                        unsafe_allow_html=True
-                    )
-                    
-                    with st.popover(f"⚙️ Transition: {pid}", use_container_width=True):
-                        st.markdown(f"**Manage Workflow State for Ticket: {pid}**")
-                        new_status = st.selectbox("Transition Status Option", options=STATUS_OPTIONS, index=STATUS_OPTIONS.index(task["Status"]), key=f"status_{pid}")
-                        new_cost = st.number_input("Vendor Cost Input", min_value=0.0, step=0.001, value=float(task["Vendor Cost"]), format="%f", key=f"cost_{pid}")
-                        
-                        if st.button("Apply Changes", key=f"btn_{pid}", type="primary"):
-                            df_db.set_index("Project ID", inplace=True)
-                            df_db.at[pid, "Status"] = new_status
-                            df_db.at[pid, "Vendor Cost"] = new_cost
-                            
-                            b_val = float(task["Budget Value"])
-                            df_db.at[pid, "Gross Profit %"] = ((b_val - new_cost) / b_val * 100.0) if b_val > 0 else 0.0
-                            
-                            df_db.reset_index(inplace=True)
-                            save_database(df_db)
-                            st.toast(f"💾 Ticket {pid} updated successfully!")
-                            st.rerun()
+                    df_db.reset_index(inplace=True)
+                    save_database(df_db)
+                    st.toast(f"💾 Changes committed successfully to {pid}!", icon="✅")
+                    st.rerun()
 
-    # Master Data Exporter Report
+    # Master Report Exporter
     st.markdown("---")
     csv_report = df_db.to_csv(index=False).encode('utf-8')
     st.download_button(
-        label="📥 Export Master JIRA Production Report (CSV)",
+        label="📤 Export Live Master Production Log (CSV)",
         data=csv_report,
-        file_name=f"FIDEL_JIRA_Report_{datetime.now().strftime('%Y%m%d')}.csv",
+        file_name=f"FIDEL_Production_Report_{datetime.now().strftime('%Y%m%d')}.csv",
         mime="text/csv",
         type="secondary"
     )
 else:
-    st.info("💡 JIRA board is currently completely clear. Use the intake engine panel on the left to spin up your first ticket issue card!")
+    st.info("💡 Production database is currently empty. Use the input matrix engine panel on the left to initialize logs.")
