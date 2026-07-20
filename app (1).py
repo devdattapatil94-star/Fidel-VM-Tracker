@@ -119,7 +119,7 @@ with st.sidebar:
         "SDL Trados 2021", "SDL Trados 2022", "Similis", "SmartCAT", 
         "Smartling", "Wordfast"
     ]
-    selected_tools = st.multiselect("Client CAT Tool *", options=cat_options)
+    selected_tools = st.multiselect("Client Tool *", options=cat_options)
     
     volume = st.text_input("Volume (Words / Minutes) *", placeholder="e.g., 5000 words")
     
