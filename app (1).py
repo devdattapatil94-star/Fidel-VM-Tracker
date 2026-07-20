@@ -1,164 +1,162 @@
 import streamlit as st
-from datetime import datetime
-import os
-import requests
-import base64
 import pandas as pd
+from datetime import datetime
 
 # ==========================================
-# 1. PAGE SETUP & DATA STORAGE INIT
+# 1. PAGE CONFIGURATION & INTAKE SETTINGS
 # ==========================================
-st.set_page_config(page_title="VM Project Pipeline Tracker", page_icon="📊", layout="wide")
+st.set_page_config(
+    page_title="VM Production & Pipeline Tracker",
+    page_icon="📊",
+    layout="wide"
+)
 
-# Persistent CSV file to act as our local database
-DB_FILE = "vm_project_tracker.csv"
+# Initialize data state tracking matrix for the pipeline rows
+if "pipeline_data" not in st.session_state:
+    st.session_state.pipeline_data = []
 
-def load_data():
-    if os.path.exists(DB_FILE):
-        try:
-            return pd.read_csv(DB_FILE)
-        except:
-            pass
-    
-    # Return empty DataFrame with proper layout structural column definitions
-    return pd.DataFrame(columns=[
-        "Project ID", "Timestamp", "Language Pair", "Task Type", 
-        "Volume", "Deadline", "Client Budget ($)", "Assigned Vendor", 
-        "Vendor Rate ($)", "Project Status"
-    ])
-
-def save_data(df):
-    df.to_csv(DB_FILE, index=False)
-
-# Initialize session state data cleanly
-if 'tracker_df' not in st.session_state:
-    st.session_state.tracker_df = load_data()
-
-# ==========================================
-# 2. HEADER SECTION (LOGO & TITLE SIDE-BY-SIDE)
-# ==========================================
-logo_path = "FIDEL.NSE.png"
-col_logo, col_title = st.columns([0.6, 4.4], vertical_alignment="center")
-with col_logo:
-    if os.path.exists(logo_path):
-        st.image(logo_path, width=85)
-    else:
-        st.warning("⚠️ Place FIDEL.NSE.png in your repo")
-with col_title:
-    st.markdown("<h1 style='margin: 0; padding: 0; font-size: 2.25rem; white-space: nowrap;'>VM Production & Pipeline Tracker</h1>", unsafe_allow_html=True)
-
-st.markdown("Track active localization workflows, monitor client budgets against vendor rates, and manage execution states seamlessly.")
-st.markdown("---")
-
-# ==========================================
-# 3. SIDEBAR: PROJECT INTAKE FORM
-# ==========================================
-st.sidebar.header("📥 PM / Sales Project Intake")
-st.sidebar.markdown("Use this form to submit upcoming project requirements to the VM pipeline.")
-
-# Create the form container anchor object
-intake_form = st.sidebar.form(key="intake_form", clear_on_submit=True)
-
-# Attach widgets directly to the container object safely
-p_lang = intake_form.text_input("Language Pair *", placeholder="e.g., English -> Japanese")
-p_type = intake_form.selectbox("Task Type *", ["Translation", "Editing", "Localization Testing", "Subtitling", "Voice-Over"])
-p_vol = intake_form.text_input("Volume (Words / Minutes) *", placeholder="e.g., 5000 words")
-p_deadline = intake_form.date_input("Client Deadline *")
-p_budget = intake_form.number_input("Client Budget ($) *", min_value=0.0, step=50.0)
-
-# Attach the submit button explicitly to the form container
-submit_intake = intake_form.form_submit_button("Submit to VM Pipeline")
-
-if submit_intake:
-    if p_lang and p_vol:
-        # Generate unique project reference ID
-        project_id = f"FIDEL-{datetime.now().strftime('%M%S')}"
-        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M")
-        
-        # Assemble new project dataset row
-        new_row = {
-            "Project ID": project_id,
-            "Timestamp": timestamp,
-            "Language Pair": p_lang,
-            "Task Type": p_type,
-            "Volume": p_vol,
-            "Deadline": str(p_deadline),
-            "Client Budget ($)": p_budget,
-            "Assigned Vendor": "Unassigned",  
-            "Vendor Rate ($)": 0.0,           
-            "Project Status": "Pipeline Intake" 
-        }
-        
-        # Append data row back to data stores safely
-        st.session_state.tracker_df = pd.concat([st.session_state.tracker_df, pd.DataFrame([new_row])], ignore_index=True)
-        save_data(st.session_state.tracker_df)
-        
-        st.sidebar.success(f"✅ Row created! Assigned ID: {project_id}")
-        
-        # OUTLOOK EMAIL ALERT AUTOMATION LOGIC
-        st.sidebar.info(f"📧 **Outlook Automation Alert Triggered:**\n\nSent notification regarding **{project_id}** ({p_lang}) to the Vendor Management inbox successfully.")
-        st.rerun()
-    else:
-        st.sidebar.error("❌ Failed. Language Pair and Volume fields are mandatory.")
+# Master list array containing your explicit language directory selections
+LANGUAGES_POOL = [
+    "Afar", "Afrikaans (South Africa)", "Ahrani", "Akan", "Akha", "Albanian", "Amharic", 
+    "Ancient Greek", "Arabic", "Arabic (Egypt)", "Arabic (Oman)", "Arabic (Algeria)", 
+    "Arabic (Bahrain)", "Arabic (Chad)", "Arabic (Iraq)", "Arabic (Jordan)", "Arabic (Kuwait)", 
+    "Arabic (Lebanon)", "Arabic (Libya)", "Arabic (Mauritania)", "Arabic (Morocco)", 
+    "Arabic (Palestinian Territory)", "Arabic (Qatar)", "Arabic (Saudi Arabia)", "Arabic (Sudan)", 
+    "Arabic (Syria)", "Arabic (Tunisia)", "Arabic (United Arab Emirates)", "Arabic (Western Sahara)", 
+    "Arabic (Yemen)", "Armenian", "Assamese", "Asturian (Spain)", "Ateso", "Avar", "Awadhi", 
+    "Aymara", "Azerbaijani", "Azeri (Cyrillic)", "Azeri Latin", "Bagheli", "Bambara", "Bashkir", 
+    "Basque", "Bassa (BSQ)", "Bemba", "Bengali", "Bengali (Bangladesh)", "Berber (Tamazight)", 
+    "Bhili (India)", "Bhojpuri", "Bhutani", "Bihari", "Bikol", "Bislama", "Bodo", "Bosnian (Cyrillic)", 
+    "Bosnian (Latin)", "Breton", "Bulgarian", "Buli", "Bundeli", "Burmese", "Burushaski", 
+    "Burushaski (Pakistan)", "Byelorussian", "Cantonese", "Carolinian", "Catalan", "Catalan (Spain)", 
+    "Cebuano (Philippines)", "Cham", "Chamorro", "Chhattisgarhi (India)", "Chichewa", "Chin (Falam)", 
+    "Chinese (Mandarin)", "Chinese (Simplified)", "Chinese (Singapore)", "Chinese (Traditional)", 
+    "Chinese, Hong Kong", "Chittagonian (CTG)", "Chuukese", "Corsican", "Croatian", "Czech", 
+    "Dandami Maria (India)", "Danish", "Dari", "Dhivehi-Maldivian (Maldives)", "Dholuo", "Dhundari", 
+    "Dinka", "Dioula", "Divehi", "Dogon", "Dogri", "Dothraki", "Dutch", "Dutch (Belgium)", 
+    "Dzongkha (DZ)", "Eastern Armenian", "Eastern Tamang", "Edo(Bini)", "Efik (Africa)", 
+    "English (Australia)", "English (Canada)", "English (Hong Kong)", "English (India)", 
+    "English (Nigeria)", "English (Philippines)", "English (Singapore)", "English (South Africa)", 
+    "English (Switzerland)", "English (UK)", "English (USA)", "English (United Arab Emirates)", 
+    "English(Malaysia)", "English (Asia)", "English (Austria)", "English (Cyprus)", "English (Germany)", 
+    "English (Holland)", "English (Ireland)", "English (Neutral)", "English (New Zealand)", 
+    "Esperanto", "Estonian", "Ewe (Ghana)", "Fante (Fanti) (FAT)", "Faroese (Faroe Islands)", 
+    "Farsi", "Fijian", "Filipino", "Finnish", "Flemish", "French", "French (Belgium)", 
+    "French (Cameroon) (FR CM)", "French (Canada)", "French (France)", "French (Haiti) (FR-Haiti)", 
+    "French (Luxembourg)", "French (Morocco)", "French (Switzerland)", "Frisian", "Fula", 
+    "Galician (Spain)", "Garhwali", "Garo", "Georgian", "German (Austria)", "German (Belgium)", 
+    "German (Germany)", "German (Holland)", "German (Luxembourg)", "German (Switzerland)", 
+    "Gondi", "Greek", "Greenlandic", "Guarani", "Gujarati (India)", "Haitian Creole", "Hakha Chin", 
+    "Haryanvi (BGC)", "Hausa", "Hawaiian", "Hebrew", "Herero (Namibia)", "Hijazi Arabic", 
+    "Hiligaynon", "Hindi", "Hindi Latin", "Hmong", "Hmong (USA)", "Hokkien (Fukienese)", 
+    "Hungarian", "Icelandic", "Igbo", "Ilocano", "India", "Indonesian", "Interlingua", 
+    "Interlingue", "Inuktitut", "Inupiak", "Irish (Ireland)", "Italian", "Italian (Switzerland)", 
+    "Iu Mien", "Jamaican English Creole", "Japanese", "Javanese", "Juba Arabic", "Kabiye", 
+    "Kachin", "Kam Mueang (Lanna) (NOD)", "Kangri", "Kannada (India)", "Kanuri", "Kaonde", 
+    "Karen", "Karenni (Kayah)(eastern)", "Karenni (Kayah)(western)", "Kasem", "Kashmiri", 
+    "Kazakh", "Khashi", "Khasi", "Khmer", "Khmu (KJG)", "Khowar", "Kikongo (Congo)", "Kikuyu", 
+    "Kinyarwanda", "Kirghiz", "Kiribati", "Kirundi (Rundi) (RN)", "Kiswahili (Africa)", 
+    "Klingon", "Konkani (India)", "Korean", "Kosraean", "Kru", "Kuanyama", "Kurdish (Turkey)", 
+    "Kurdish (Iraq)", "Kurdish (Kurmanji)", "Kurdish (Sorani)", "Lambadi", "Lao", "Laothian", 
+    "Latin", "Latvian", "Lingala", "Lithuanian", "Lozi", "Luganda", "Lunda", "Luxembourgish", 
+    "Maasai (MAS)", "Maay", "Macedonian", "Macedonian (MK)", "Maithili", "Malagasy (Madagascar)", 
+    "Malay (Malysia)", "Malay Chinese", "Malayalam (India)", "Malinke", "Maltese", "Manipuri", 
+    "Maori", "Marathi", "Maria-Dandami", "Marshallese", "Marwari", "Masalit", "Meru (Kimeru) (MER)", 
+    "Mewari", "Mien (Iu Mien) (IUM)", "Mirpuri", "Mizo", "Moldavian", "Mongolian", "Montenegrin", 
+    "Morisyen (Mauritian Créole)", "Nagamese", "Nankam", "Nauru", "Navajo", "Ndebele", "Nepali", 
+    "Niuean", "Nkore", "Nobiin", "Northern Sotho (South Africa)", "Norwegian", "Norwegian (Bokmål)", 
+    "Norwegian Bokmaal (Norway)", "Norwegian Nynorsk (Norway)", "Nuer", "Nyanja", "Nyoro", 
+    "Occitan", "Oriya", "Oromo", "Ossetian", "Ottoman Turkish", "Pahari", "Pak Thai (Dambro) (SOU)", 
+    "Palauan", "Pampanga (Kapampangan)", "Pangasinan", "Papiamento", "Pashto", "Persian", 
+    "Pohnpeian", "Polish", "Portuguese", "Portuguese (Brazil)", "Portuguese (Portugal)", 
+    "Portuguese (Angola)", "Portuguese (Mozambique)", "Punjabi", "Punjabi (India)", 
+    "Punjabi (Pakistan)", "Quechua", "Quenya", "Ratotongan", "Rhaeto-Romance", "Rohingya", 
+    "Romanian", "Rundi", "Russian", "Saint Lucian Creole French", "Samoan", 
+    "Sango (Central African Republic)", "Sangro", "Sanskrit", "Santali", "Saraiki", "Sardinian", 
+    "Scottish Gaelic (Scotland)", "Sepedi", "Serbian", "Serbian (Cyrillic)", "Serbian (Latin)", 
+    "Serbian Montenegro (Cyrillic)", "Serbian Montenegro (Latin)", "Serbo-Croatian (SH)", 
+    "Seselwa Creole French", "Sesotho", "Setswana (Africa)", "Shan", "Sherpa (Nepal)", "Shona", 
+    "Sindarin", "Sindhi", "Singhalese", "Siswati", "Slovak", "Slovene", "Slovenian (SL)", 
+    "Somali", "Sorbian (Lower)", "Sorbian (Upper)", "Sotho", "Spanish (Argentina)", "Spanish (Bolivia)", 
+    "Spanish (Chile)", "Spanish (Colombia)", "Spanish (Costa Rica)", "Spanish (Cuba)", 
+    "Spanish (Dominican Republic)", "Spanish (Ecuador)", "Spanish (El Salvador)", "Spanish (Guatemala)", 
+    "Spanish (Honduras)", "Spanish (Latin America)", "Spanish (Mexico)", "Spanish (Nicaragua)", 
+    "Spanish (Panama)", "Spanish (Paraguay)", "Spanish (Spain)", "Spanish (USA)", "Sundanese (SU)", 
+    "Swahili (Burundi)", "Swahili (Kenya)", "Swahili (Rwanda)", "Swahili (Tanzania)", "Swahili (Uganda)", 
+    "Swedish", "Sylheti (SYL)", "Syriac", "Tagalog (TL)", "Tai Dam (Vietnam)", "Tajik (TG)", 
+    "Tamil", "Tamil Sri-Lankan", "Telugu", "Tetum", "Thai (TH)", "Tibetan (BO)", "Tigrinya (TI)", 
+    "Tok Pisin", "Tonga (Polynesian)", "Tongan", "Tulu", "Turkish", "Turkmen (TK)", "Twi (TW)", 
+    "Ukrainian", "Upper Guinea Creole", "Urdu", "Urdu (India)", "Uyghur", "Uzbek (UZ)", 
+    "Venda (VE)", "Vietnamese (VI)", "Waray-Waray (WW)", "Xhosa (XH)", "Xârâcùù (New Caledonia)", 
+    "Yagwoia", "Yiddish (Israel)", "Yiddish (USA)", "Yoruba", "Zomi/Zou", "Zulu (South Africa)"
+]
 
 # ==========================================
-# 4. MAIN INTERFACE: OPERATIONAL MATRIX
+# 2. SIDEBAR NAVIGATION & INTAKE CONTROL ENGINE
 # ==========================================
-df = st.session_state.tracker_df
-
-if df.empty or len(df) == 0:
-    st.info("💡 No active pipeline requirements registered yet. Use the sidebar form to populate tasks into the tracker matrix.")
-else:
-    st.subheader("📋 Active Workloads & Assignment Status")
-    st.markdown("Review operational jobs below. Select a project reference from the tools below to modify statuses or log internal rate metrics.")
-    
-    # Display the production tracker data sheet cleanly
-    st.dataframe(df, use_container_width=True)
-    
+with st.sidebar:
+    st.markdown("### 📥 PM / Sales Project Intake")
+    st.write("Use this form to submit upcoming project requirements to the VM pipeline.")
     st.markdown("---")
     
-    # ==========================================
-    # 5. VM MANUAL OVERRIDES CONTROL PAD
-    # ==========================================
-    st.subheader("🛠️ Vendor Coordinator Update Center")
+    # Reworked language field selectors using your structural pool arrays
+    src_langs = st.multiselect("Source Language(s) *", OPTIONS=LANGUAGES_POOL)
+    tgt_langs = st.multiselect("Target Language(s) *", OPTIONS=LANGUAGES_POOL)
     
-    col_sel, col_fields, col_rates = st.columns([1.2, 1.5, 1.5])
+    task_type = st.selectbox("Task Type *", [
+        "Translation", "Editing", "Proofreading", "Review", "Revision", 
+        "Subtitling", "Closed Captioning", "Voice-Over", "Transcription", 
+        "Transcreation", "Data Collection", "Data Annotation"
+    ])
     
-    # Safe isolation extraction handling string indices metrics calculations
-    unique_ids = df["Project ID"].unique()
+    volume = st.text_input("Volume (Words / Minutes) *", placeholder="e.g., 5000 words")
+    deadline = st.date_input("Client Deadline *", datetime.today())
+    budget = st.number_input("Client Budget ($) *", min_value=0.0, step=50.0, format="%.2f")
     
-    with col_sel:
-        selected_id = st.selectbox("Select Project to Modify:", unique_ids)
-        
-    if selected_id:
-        proj_idx = df[df["Project ID"] == selected_id].index[0]
-        current_vendor = df.loc[proj_idx, "Assigned Vendor"]
-        current_rate = float(df.loc[proj_idx, "Vendor Rate ($)"])
-        current_status = df.loc[proj_idx, "Project Status"]
-        client_budget = float(df.loc[proj_idx, "Client Budget ($)"])
-        
-        with col_fields:
-            update_vendor = st.text_input("Assign Vendor Name:", value="" if current_vendor == "Unassigned" else current_vendor)
-            status_options = ["Pipeline Intake", "Linguist Contacted", "In Production", "QC Review", "Delivered", "Cancelled"]
-            status_idx = status_options.index(current_status) if current_status in status_options else 0
-            update_status = st.selectbox("Update Pipeline Status:", status_options, index=status_idx)
+    st.markdown(" ")
+    if st.button("Submit to VM Pipeline", use_container_width=True, type="primary"):
+        if src_langs and tgt_langs and volume and budget > 0:
+            # Format display layout metrics cleanly
+            src_str = ", ".join(src_langs)
+            tgt_str = ", ".join(tgt_langs)
             
-        with col_rates:
-            update_rate = st.number_input("Log Vendor Assignment Cost ($):", min_value=0.0, value=current_rate, step=10.0)
-            
-            # Visual financial check layout calculation matrix
-            margin = client_budget - update_rate
-            if margin < 0:
-                st.warning(f"⚠️ Financial Loss Warning: Deficit of ${abs(margin)}")
-            elif update_rate > 0:
-                st.success(f"📈 Estimated Net Profit Margin: ${margin}")
+            new_task = {
+                "Timestamp": datetime.now().strftime("%Y-%m-%d %H:%M"),
+                "Source Language": src_str,
+                "Target Language": tgt_str,
+                "Task Type": task_type,
+                "Volume": volume,
+                "Deadline": deadline.strftime("%Y-%m-%d"),
+                "Budget ($)": f"${budget:,.2f}",
+                "Status": "Pipeline Intake"
+            }
+            st.session_state.pipeline_data.append(new_task)
+            st.success("🎯 Task successfully routed to main production queue.")
+        else:
+            st.error("❌ Form Incomplete. Please specify languages, volume, and structural allocation metrics.")
 
-        # Action submission execution loop updates
-        if st.button("Commit Status & Assignment Updates", type="primary"):
-            st.session_state.tracker_df.loc[proj_idx, "Assigned Vendor"] = update_vendor if update_vendor else "Unassigned"
-            st.session_state.tracker_df.loc[proj_idx, "Vendor Rate ($)"] = update_rate
-            st.session_state.tracker_df.loc[proj_idx, "Project Status"] = update_status
-            
-            save_data(st.session_state.tracker_df)
-            st.success(f"💾 Changes saved successfully for entry row references: {selected_id}!")
-            st.rerun()
+# ==========================================
+# 3. MAIN DASHBOARD FRAME DISPLAY LAYER
+# ==========================================
+# Header banner assembly matching your exact icon block
+col_icon, col_title = st.columns([0.6, 5.4], vertical_alignment="center")
+with col_icon:
+    st.markdown(
+        "<div style='background-color:#FFFFFF; padding:12px; border-radius:8px; display:flex; justify-content:center; align-items:center; width:70px; height:70px;'>"
+        "<span style='font-size:38px; color:#1E3A8A;'>🪢</span>"
+        "</div>", 
+        unsafe_allow_html=True
+    )
+with col_title:
+    st.markdown("<h1 style='margin: 0; padding: 0; font-size: 2.5rem;'>VM Production & Pipeline Tracker</h1>", unsafe_allow_html=True)
+
+st.write("Track active localization workflows, monitor client budgets against vendor rates, and manage execution states seamlessly.")
+st.markdown("---")
+
+# Conditional tracking row matrix generation pad
+if len(st.session_state.pipeline_data) == 0:
+    st.info("💡 No active pipeline requirements registered yet. Use the sidebar form to populate tasks into the tracker matrix.")
+else:
+    df_pipeline = pd.DataFrame(st.session_state.pipeline_data)
+    # Reverse column sorting layout hierarchy logic to display newest drops first
+    st.dataframe(df_pipeline.iloc[::-1], use_container_width=True, hide_index=True)
