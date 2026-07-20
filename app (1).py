@@ -244,28 +244,28 @@ if len(df_db) > 0:
     st.markdown("---")
 
     # ------------------------------------------
-    # 🔍 REFACTORED MULTI-FILTER COMPONENT BAR
+    # 🔍 HIGH-VISIBILITY COLLAPSIBLE FILTER PANEL
     # ------------------------------------------
-    st.markdown("##### 🛠️ Pipeline Search Filters")
-    f_col1, f_col2, f_col3, f_col4 = st.columns([1.2, 1.2, 1.0, 0.8])
-    
-    with f_col1:
+    with st.expander("🛠️ Advanced Search & Filter Dashboard Controls", expanded=True):
+        st.write("Use these options to filter down the main workspace table:")
+        
+        # Row 1: Language Multi-selects (Full width for clear, uncut tag visibility)
         search_src = st.multiselect("Filter Source Language", options=LANGUAGES_POOL, key="filter_src")
-    with f_col2:
         search_tgt = st.multiselect("Filter Target Language", options=LANGUAGES_POOL, key="filter_tgt")
-    with f_col3:
-        filter_task = st.selectbox("Filter by Task Type", options=["All"] + TASK_TYPE_OPTIONS, key="filter_task_select")
-    with f_col4:
-        filter_stat = st.selectbox("Filter by Workspace Status", options=["All"] + STATUS_OPTIONS, key="filter_status_select")
+        
+        # Row 2: Selectboxes arranged in a balanced layout grid to provide plenty of text space
+        filter_col1, filter_col2 = st.columns(2)
+        with filter_col1:
+            filter_task = st.selectbox("Filter by Task Type", options=["All"] + TASK_TYPE_OPTIONS, key="filter_task_select")
+        with filter_col2:
+            filter_stat = st.selectbox("Filter by Workspace Status", options=["All"] + STATUS_OPTIONS, key="filter_status_select")
 
     # Apply logical filtering criteria arrays
     df_filtered = df_db.copy()
     
     if search_src:
-        # Check if row's comma-separated source languages overlap with selections
         df_filtered = df_filtered[df_filtered["Source Language"].apply(lambda x: any(lang.strip() in [s.strip() for s in str(x).split(",")] for lang in search_src))]
     if search_tgt:
-        # Check if row's comma-separated target languages overlap with selections
         df_filtered = df_filtered[df_filtered["Target Language"].apply(lambda x: any(lang.strip() in [t.strip() for t in str(x).split(",")] for lang in search_tgt))]
     if filter_task != "All":
         df_filtered = df_filtered[df_filtered["Task Type"] == filter_task]
@@ -288,7 +288,7 @@ if len(df_db) > 0:
                 hide_index=True,
                 disabled=["Project ID", "Timestamp", "Source Language", "Target Language", "Task Type", "CAT Tool(s)", "Volume", "Reference File", "Deadline (IST)", "Budget Display", "Client Currency", "Budget Value", "Gross Profit %"],
                 column_config={
-                    "Status": st.column_config.SelectboxColumn("Status", options=STATUS_OPTIONS, width="medium", required=True),
+                    "Status": st.column_config.SelectboxColumn("Status", options=STATUS_OPTIONS, width="large", required=True),
                     "Vendor Cost": st.column_config.NumberColumn("Vendor Cost", help="Enter localized vendor delivery cost parameters", min_value=0.0, step=0.001, format="%f"),
                     "Budget Display": "Client Budget",
                     "Gross Profit %": st.column_config.NumberColumn("Gross Profit %", format="%.1f%%")
