@@ -119,10 +119,17 @@ def load_database():
     if os.path.exists(DB_FILE):
         try:
             df = pd.read_csv(DB_FILE)
+            
+            # Auto-reconciliation to prevent KeyErrors on older structural logs
             if "Client Currency" not in df.columns: df["Client Currency"] = "USD ($)"
             if "Budget Value" not in df.columns: df["Budget Value"] = 0.0
             if "Vendor Cost" not in df.columns: df["Vendor Cost"] = 0.0
             if "Gross Profit %" not in df.columns: df["Gross Profit %"] = 0.0
+            if "Budget Display" not in df.columns:
+                if "Budget" in df.columns:
+                    df["Budget Display"] = df["Budget"]
+                else:
+                    df["Budget Display"] = df["Budget Value"].astype(str)
             return df
         except:
             pass
@@ -181,7 +188,10 @@ with st.sidebar:
             formatted_deadline = f"{deadline_date.strftime('%Y-%m-%d')} {selected_hour}:{selected_min} IST"
             
             symbol = currency.split(" ")[1].replace("(", "").replace(")", "")
-            formatted_budget = f"{symbol}{int(budget_val):,}" if "JPY" in currency else f"{symbol}{budget_val:.3f}".rstrip('0').rstrip('.')
+            if "JPY" in currency:
+                formatted_budget = f"{symbol}{int(budget_val):,}"
+            else:
+                formatted_budget = f"{symbol}{budget_val:.3f}".rstrip('0').rstrip('.') if budget_val % 0.01 != 0 else f"{symbol}{budget_val:,.2f}"
             
             file_name_record = ref_file.name if ref_file is not None else "None"
             proj_id = f"FID-{datetime.now().strftime('%m%d%H%M%S')}"
@@ -208,11 +218,12 @@ with st.sidebar:
             save_database(df_updated)
             st.success(f"⚡ Ticket {proj_id} Created Successfully!")
             st.rerun()
+        else:
+            st.error("❌ Form Incomplete. Please check mandatory fields.")
 
 # ==========================================
 # 3. MAIN WORKSPACE - JIRA AGILE KANBAN BOARD
 # ==========================================
-# JIRA Header styling
 st.markdown(
     "<div style='display: flex; align-items: center; gap: 12px; margin-bottom: 20px;'>"
     "<div style='background-color: #0052CC; color: white; padding: 10px; border-radius: 4px; font-weight: bold; font-size: 24px;'>⚡</div>"
@@ -223,13 +234,14 @@ st.markdown(
 )
 
 if len(df_db) > 0:
-    # High-Visibility Advanced Filter Dashboard
+    # High-Visibility Full-Width Advanced Filter Expander Panel
     with st.expander("🔍 Search Filters & Board Configurations", expanded=True):
+        st.write("Filter tickets down visually across your workflow board columns:")
         search_src = st.multiselect("Filter Source Language", options=LANGUAGES_POOL, key="filter_src")
         search_tgt = st.multiselect("Filter Target Language", options=LANGUAGES_POOL, key="filter_tgt")
         filter_task = st.selectbox("Filter by Task Type", options=["All"] + TASK_TYPE_OPTIONS, key="filter_task_select")
 
-    # Apply database filtering rules
+    # Apply database filtering rules safely
     df_filtered = df_db.copy()
     if search_src:
         df_filtered = df_filtered[df_filtered["Source Language"].apply(lambda x: any(l.strip() in [s.strip() for s in str(x).split(",")] for l in search_src))]
@@ -238,24 +250,23 @@ if len(df_db) > 0:
     if filter_task != "All":
         df_filtered = df_filtered[df_filtered["Task Type"] == filter_task]
 
-    # Render JIRA Board Swimlanes Side-by-Side
+    # Render JIRA Kanban Board Swimlanes Side-by-Side
     board_columns = st.columns(len(KANBAN_COLUMNS))
 
     for col_idx, (lane_title, statuses) in enumerate(KANBAN_COLUMNS.items()):
         with board_columns[col_idx]:
             # Swimlane Title Card Header Layout
             st.markdown(
-                f"<div style='background-color: #F4F5F7; padding: 10px; border-radius: 5px; font-weight: bold; text-align: center; border-bottom: 3px solid #0052CC; margin-bottom: 15px;'>"
+                f"<div style='background-color: #F4F5F7; padding: 10px; border-radius: 5px; font-weight: bold; text-align: center; border-bottom: 3px solid #0052CC; margin-bottom: 15px; min-height: 50px; display: flex; align-items: center; justify-content: center;'>"
                 f"{lane_title} ({len(df_filtered[df_filtered['Status'].isin(statuses)])})"
                 f"</div>", 
                 unsafe_allow_html=True
             )
             
-            # Isolate cards matching this lane
             df_lane = df_filtered[df_filtered["Status"].isin(statuses)]
             
             if df_lane.empty:
-                st.markdown("<div style='text-align: center; color: #A5ADBA; font-size: 13px; padding: 20px;'>No issues match</div>", unsafe_allow_html=True)
+                st.markdown("<div style='text-align: center; color: #A5ADBA; font-size: 13px; padding: 20px; background-color: #FAFBFC; border: 1px dashed #DFE1E6; border-radius: 4px;'>No tickets here</div>", unsafe_allow_html=True)
             else:
                 for _, task in df_lane.iterrows():
                     pid = task["Project ID"]
@@ -272,7 +283,7 @@ if len(df_db) > 0:
                     bg_color = "#FFECEC" if is_urgent else "#FFFFFF"
                     urgent_badge = "<span style='background-color: #DE350B; color: white; font-size: 10px; padding: 2px 6px; border-radius: 3px; font-weight: bold;'>URGENT 🚨</span>" if is_urgent else ""
                     
-                    # JIRA Ticket Component Body Markdown Injection
+                    # JIRA Ticket Body Render
                     st.markdown(
                         f"<div style='background-color: {bg_color}; padding: 12px; border-radius: 4px; box-shadow: 0 1px 3px rgba(0,0,0,0.12); margin-bottom: 12px; {card_border}'>"
                         f"<div style='display: flex; justify-content: space-between; align-items: center;'><strong style='color: #0052CC;'>{pid}</strong>{urgent_badge}</div>"
@@ -281,32 +292,31 @@ if len(df_db) > 0:
                         f"<div style='font-size: 12px; margin-top: 2px;'>📊 Vol: {task['Volume']} | 📂 File: {task['Reference File']}</div>"
                         f"<div style='font-size: 12px; margin-top: 2px;'>💰 Budget: {task['Budget Display']}</div>"
                         f"<div style='font-size: 11px; color: #6B778C; margin-top: 6px;'>📅 Due: {task['Deadline (IST)']}</div>"
-                        f"<div style='background-color: #F4F5F7; font-size: 11px; padding: 2px 6px; border-radius: 3px; display: inline-block; margin-top: 6px; color: #42526E;'>📌 Sub-Status: {task['Status']}</div>"
+                        f"<div style='background-color: #F4F5F7; font-size: 11px; padding: 2px 6px; border-radius: 3px; display: inline-block; margin-top: 6px; color: #42526E;'>📌 Status: {task['Status']}</div>"
                         f"</div>", 
                         unsafe_allow_html=True
                     )
                     
-                    # Interactive VM Control Form right inside the card footprint block
-                    with st.popover(f"⚙️ Action Task: {pid}", use_container_width=True):
+                    # VM Team interactive configuration popover block directly attached to ticket footer footprint
+                    with st.popover(f"⚙️ Transition: {pid}", use_container_width=True):
                         st.markdown(f"**Manage Workflow State for Ticket: {pid}**")
                         new_status = st.selectbox("Transition Status Option", options=STATUS_OPTIONS, index=STATUS_OPTIONS.index(task["Status"]), key=f"status_{pid}")
                         new_cost = st.number_input("Vendor Cost Input", min_value=0.0, step=0.001, value=float(task["Vendor Cost"]), format="%f", key=f"cost_{pid}")
                         
-                        if st.button("Apply Status Changes", key=f"btn_{pid}", type="primary"):
+                        if st.button("Apply Changes", key=f"btn_{pid}", type="primary"):
                             df_db.set_index("Project ID", inplace=True)
                             df_db.at[pid, "Status"] = new_status
                             df_db.at[pid, "Vendor Cost"] = new_cost
                             
-                            # Auto margin loop calculate
                             b_val = float(task["Budget Value"])
                             df_db.at[pid, "Gross Profit %"] = ((b_val - new_cost) / b_val * 100.0) if b_val > 0 else 0.0
                             
                             df_db.reset_index(inplace=True)
                             save_database(df_db)
-                            st.toast(f"💾 Ticket {pid} details updated successfully!")
+                            st.toast(f"💾 Ticket {pid} updated successfully!")
                             st.rerun()
 
-    # Report Data Exporter System Block
+    # Master Data Exporter Report
     st.markdown("---")
     csv_report = df_db.to_csv(index=False).encode('utf-8')
     st.download_button(
