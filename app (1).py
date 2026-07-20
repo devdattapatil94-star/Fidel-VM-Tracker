@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 import os
-from datetime import datetime
+from datetime import datetime, timedelta
 
 # ==========================================
 # 1. PAGE CONFIGURATION & DATABASE SETUP
@@ -14,17 +14,10 @@ st.set_page_config(
 
 DB_FILE = "pipeline_database.csv"
 
-# The specific project tracking lifecycle choices for the VM team
 STATUS_OPTIONS = [
-    "Not started", 
-    "In progress", 
-    "Completed", 
-    "Cancelled", 
-    "Delayed", 
-    "In Discussion stage with the PM", 
-    "In Discussion stage with the client", 
-    "No Response received later from the linguist", 
-    "Pending"
+    "Not started", "In progress", "Completed", "Cancelled", "Delayed", 
+    "In Discussion stage with the PM", "In Discussion stage with the client", 
+    "No Response received later from the linguist", "Pending"
 ]
 
 LANGUAGES_POOL = [
@@ -105,13 +98,19 @@ LANGUAGES_POOL = [
 def load_database():
     if os.path.exists(DB_FILE):
         try:
-            return pd.read_csv(DB_FILE)
+            df = pd.read_csv(DB_FILE)
+            # Support margin metrics configuration structures back-compatibly
+            if "Client Currency" not in df.columns: df["Client Currency"] = "USD ($)"
+            if "Budget Value" not in df.columns: df["Budget Value"] = 0.0
+            if "Vendor Cost" not in df.columns: df["Vendor Cost"] = 0.0
+            if "Gross Profit %" not in df.columns: df["Gross Profit %"] = 0.0
+            return df
         except:
             pass
     return pd.DataFrame(columns=[
         "Project ID", "Timestamp", "Source Language", "Target Language", 
         "Task Type", "CAT Tool(s)", "Volume", "Reference File", 
-        "Deadline (IST)", "Budget", "Status"
+        "Deadline (IST)", "Client Currency", "Budget Value", "Budget Display", "Vendor Cost", "Gross Profit %", "Status"
     ])
 
 def save_database(df):
@@ -141,11 +140,7 @@ with st.sidebar:
         "Transcription", "Translation", "Voice-Over"
     ])
     
-    cat_options = [
-        "MateCat", "MateSub", "MemoQ", "Phrase", "SDL Trados 2019", 
-        "SDL Trados 2021", "SDL Trados 2022", "Similis", "SmartCAT", 
-        "Smartling", "Wordfast"
-    ]
+    cat_options = ["MateCat", "MateSub", "MemoQ", "Phrase", "SDL Trados 2019", "SDL Trados 2021", "SDL Trados 2022", "Similis", "SmartCAT", "Smartling", "Wordfast"]
     selected_tools = st.multiselect("Client CAT Tool *", options=cat_options)
     
     volume = st.text_input("Volume (Words / Minutes) *", placeholder="e.g., 5000 words")
@@ -197,8 +192,12 @@ with st.sidebar:
                 "Volume": volume,
                 "Reference File": file_name_record,
                 "Deadline (IST)": formatted_deadline,
-                "Budget": formatted_budget,
-                "Status": "Not started" # Always defaults to Not started on PM submission
+                "Client Currency": currency,
+                "Budget Value": float(budget_val),
+                "Budget Display": formatted_budget,
+                "Vendor Cost": 0.0,
+                "Gross Profit %": 100.0,
+                "Status": "Not started"
             }])
             
             df_updated = pd.concat([df_db, new_task], ignore_index=True)
@@ -206,54 +205,136 @@ with st.sidebar:
             st.success("🎯 Task successfully routed to main production queue.")
             st.rerun()
         else:
-            st.error("❌ Form Incomplete. Please specify languages, tools, volume, and budget metrics.")
+            st.error("❌ Form Incomplete. Please check mandatory fields.")
 
 # ==========================================
-# 3. MAIN WORKSPACE - VM CONTROL CONSOLE (RIGHT)
+# 3. MAIN WORKSPACE - VM PIPELINE ENGINE (RIGHT)
 # ==========================================
+# Header banner assembly
 col_icon, col_title = st.columns([0.6, 5.4], vertical_alignment="center")
 with col_icon:
-    st.markdown(
-        "<div style='background-color:#FFFFFF; padding:12px; border-radius:8px; display:flex; justify-content:center; align-items:center; width:70px; height:70px;'>"
-        "<span style='font-size:38px; color:#1E3A8A;'>🪢</span>"
-        "</div>", 
-        unsafe_allow_html=True
-    )
+    st.markdown("<div style='background-color:#1E3A8A; padding:12px; border-radius:8px; display:flex; justify-content:center; align-items:center; width:70px; height:70px;'><span style='font-size:38px; color:white;'>📊</span></div>", unsafe_allow_html=True)
 with col_title:
-    st.markdown("<h1 style='margin: 0; padding: 0; font-size: 2.5rem;'>VM Production & Pipeline Tracker</h1>", unsafe_allow_html=True)
+    st.markdown("<h1 style='margin:0; padding:0; font-size:2.5rem;'>VM Production & Pipeline Tracker</h1>", unsafe_allow_html=True)
 
-st.write("Track active localization workflows, monitor client budgets against vendor rates, and manage execution states seamlessly.")
+st.write("Monitor client pipelines, balance localization project margins, and assign workflow progress tags.")
 st.markdown("---")
 
-if len(df_db) == 0:
-    st.info("💡 No active pipeline requirements registered yet. Use the sidebar form to populate tasks into the tracker matrix.")
-else:
-    st.markdown("### 📋 Production Control Console")
-    st.caption("💡 **VM Action Panel:** Double-click any cell inside the **Status** column to change the pipeline progress state. PM input fields remain completely read-only.")
+if len(df_db) > 0:
+    # ------------------------------------------
+    # 📊 FEATURE 1: INTERACTIVE SUMMARY KPI CARDS
+    # ------------------------------------------
+    active_count = len(df_db[df_db["Status"].isin(["Not started", "In progress", "Pending", "Delayed"])])
     
-    # Render with newest entries positioned on top
-    df_display = df_db.copy()
+    # Calculate urgent timelines expiring within 24 hours
+    urgent_count = 0
+    now = datetime.now()
+    for dl in df_db["Deadline (IST)"]:
+        try:
+            dl_date = datetime.strptime(dl.split(" IST")[0], "%Y-%m-%d %H:%M")
+            if now <= dl_date <= (now + timedelta(hours=24)):
+                urgent_count += 1
+        except: pass
+
+    # Budget financial aggregation groupings
+    usd_tot = df_db[df_db["Client Currency"] == "USD ($)"]["Budget Value"].sum()
+    jpy_tot = df_db[df_db["Client Currency"] == "JPY (¥)"]["Budget Value"].sum()
+    inr_tot = df_db[df_db["Client Currency"] == "INR (₹)"]["Budget Value"].sum()
+
+    kp1, kp2, kp3 = st.columns(3)
+    kp1.metric("Active Queue Pipeline", f"{active_count} Projects")
+    kp2.metric("Urgent Deliveries (24 Hours) 🚨", f"{urgent_count} Tasks")
+    kp3.metric("Total Volume Value", f"${usd_tot:,.2f} | ¥{int(jpy_tot):,} | ₹{inr_tot:,.2f}")
     
-    # Main active workspace data grid interface configurations
-    edited_df = st.data_editor(
-        df_display,
-        use_container_width=True,
-        hide_index=True,
-        # Lock down ALL columns except the "Status" tracker matrix column
-        disabled=["Project ID", "Timestamp", "Source Language", "Target Language", "Task Type", "CAT Tool(s)", "Volume", "Reference File", "Deadline (IST)", "Budget"],
-        column_config={
-            "Status": st.column_config.SelectboxColumn(
-                "Status",
-                help="Change project tracking state mapping metrics",
-                width="large",
-                options=STATUS_OPTIONS,
-                required=True
+    st.markdown("---")
+
+    # ------------------------------------------
+    # 🔍 FEATURE 2: ADVANCED FILTERS
+    # ------------------------------------------
+    st.markdown("##### 🛠️ Pipeline Search Filters")
+    f_col1, f_col2, f_col3 = st.columns(3)
+    with f_col1:
+        search_lang = st.text_input("Search by Language Pair", placeholder="e.g. Japanese")
+    with f_col2:
+        filter_task = st.selectbox("Filter by Task Type", options=["All"] + sorted(list(df_db["Task Type"].unique())))
+    with f_col3:
+        filter_stat = st.selectbox("Filter by Workspace Status", options=["All"] + STATUS_OPTIONS)
+
+    # Execute dynamic matrix pipeline filtering
+    df_filtered = df_db.copy()
+    if search_lang:
+        df_filtered = df_filtered[df_filtered["Source Language"].str.contains(search_lang, case=False) | df_filtered["Target Language"].str.contains(search_lang, case=False)]
+    if filter_task != "All":
+        df_filtered = df_filtered[df_filtered["Task Type"] == filter_task]
+    if filter_stat != "All":
+        df_filtered = df_filtered[df_filtered["Status"] == filter_stat]
+
+    # ------------------------------------------
+    # 🗂️ FEATURE 3: TABBED VIEW LAYOUTS (ACTIVE vs ARCHIVE)
+    # ------------------------------------------
+    tab_active, tab_archive = st.tabs(["📋 Active Pipeline Workspace", "🗄️ Completed & Performance Archives"])
+    
+    with tab_active:
+        df_active_view = df_filtered[~df_filtered["Status"].isin(["Completed", "Cancelled"])]
+        if len(df_active_view) == 0:
+            st.info("No active production allocations matches current search criteria.")
+        else:
+            st.caption("💡 **VM Action Console:** Adjust **Vendor Cost** or change **Status** cell mapping tracks. PM fields stay locked down automatically.")
+            
+            # Form configuration schema arrays matching your custom visual goals
+            edited_active = st.data_editor(
+                df_active_view,
+                use_container_width=True,
+                hide_index=True,
+                disabled=["Project ID", "Timestamp", "Source Language", "Target Language", "Task Type", "CAT Tool(s)", "Volume", "Reference File", "Deadline (IST)", "Budget Display", "Client Currency", "Budget Value", "Gross Profit %"],
+                column_config={
+                    "Status": st.column_config.SelectboxColumn("Status", options=STATUS_OPTIONS, width="medium", required=True),
+                    "Vendor Cost": st.column_config.NumberColumn("Vendor Cost", help="Enter localized vendor delivery cost parameters", min_value=0.0, step=0.001, format="%f"),
+                    "Budget Display": "Client Budget",
+                    "Gross Profit %": st.column_config.NumberColumn("Gross Profit %", format="%.1f%%")
+                }
             )
-        }
+            
+            # Recalculate financial margin health limits dynamically
+            if not edited_active.equals(df_active_view):
+                for idx, row in edited_active.iterrows():
+                    p_id = row["Project ID"]
+                    b_val = float(row["Budget Value"])
+                    v_cost = float(row["Vendor Cost"])
+                    
+                    margin = ((b_val - v_cost) / b_val * 100.0) if b_val > 0 else 0.0
+                    edited_active.at[idx, "Gross Profit %"] = margin
+                    
+                    # Target color coding logic exceptions alerts
+                    if margin < 40.0 and v_cost > 0:
+                        st.warning(f"⚠️ Margin Alert: Project {p_id} drops below target 40% threshold ({margin:.1f}%)")
+
+                # Synchronize changes straight into CSV storage matrix blocks
+                df_db.set_index("Project ID", inplace=True)
+                edited_active.set_index("Project ID", inplace=True)
+                df_db.update(edited_active)
+                df_db.reset_index(inplace=True)
+                save_database(df_db)
+                st.rerun()
+
+    with tab_archive:
+        df_archive_view = df_filtered[df_filtered["Status"].isin(["Completed", "Cancelled"])]
+        if len(df_archive_view) == 0:
+            st.info("Archive history queue is currently clear.")
+        else:
+            st.dataframe(df_archive_view, use_container_width=True, hide_index=True)
+
+    # ------------------------------------------
+    # 📤 FEATURE 4: REPORT EXPORTER
+    # ------------------------------------------
+    st.markdown("---")
+    csv_report = df_db.to_csv(index=False).encode('utf-8')
+    st.download_button(
+        label="📥 Export Master Production Report (CSV)",
+        data=csv_report,
+        file_name=f"FIDEL_VM_Report_{datetime.now().strftime('%Y%m%d')}.csv",
+        mime="text/csv",
+        type="secondary"
     )
-    
-    # Capture changes made by the VM team in the spreadsheet dropdown and rewrite to CSV instantly
-    if not edited_df.equals(df_display):
-        save_database(edited_df)
-        st.toast("💾 Project pipeline status synchronized perfectly!", icon="✅")
-        st.rerun()
+else:
+    st.info("💡 No active pipeline requirements registered yet. Use the sidebar form to populate tasks into the tracker matrix.")
