@@ -102,7 +102,6 @@ with st.sidebar:
     src_langs = st.multiselect("Source Language(s) *", options=LANGUAGES_POOL)
     tgt_langs = st.multiselect("Target Language(s) *", options=LANGUAGES_POOL)
     
-    # TEP option appended clearly into the main task workflow select array
     task_type = st.selectbox("Task Type *", [
         "AI Voice-Over", "Audio Content Check", "Audio Data Collection", 
         "Back Translation (Chars)", "Back Translation (Words)", "Closed Captioning", 
@@ -115,7 +114,15 @@ with st.sidebar:
     ])
     
     volume = st.text_input("Volume (Words / Minutes) *", placeholder="e.g., 5000 words")
-    deadline = st.date_input("Client Deadline *", datetime.today())
+    
+    # Dual inputs for date and specific time tracking elements (IST)
+    st.markdown("<label style='font-size: 14px;'>Client Deadline *</label>", unsafe_allow_html=True)
+    col_date, col_time = st.columns([1.1, 0.9])
+    with col_date:
+        deadline_date = st.date_input("Deadline Date", datetime.today(), label_visibility="collapsed")
+    with col_time:
+        deadline_time = st.time_input("Deadline Time", datetime.now().time(), label_visibility="collapsed")
+        
     budget = st.number_input("Client Budget ($) *", min_value=0.0, step=50.0, format="%.2f")
     
     st.markdown(" ")
@@ -124,13 +131,16 @@ with st.sidebar:
             src_str = ", ".join(src_langs)
             tgt_str = ", ".join(tgt_langs)
             
+            # Format custom date strings synchronized into IST markers cleanly
+            formatted_deadline = f"{deadline_date.strftime('%Y-%m-%d')} {deadline_time.strftime('%H:%M')} IST"
+            
             new_task = {
                 "Timestamp": datetime.now().strftime("%Y-%m-%d %H:%M"),
                 "Source Language": src_str,
                 "Target Language": tgt_str,
                 "Task Type": task_type,
                 "Volume": volume,
-                "Deadline": deadline.strftime("%Y-%m-%d"),
+                "Deadline (IST)": formatted_deadline,
                 "Budget ($)": f"${budget:,.2f}",
                 "Status": "Pipeline Intake"
             }
