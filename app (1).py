@@ -113,13 +113,12 @@ with st.sidebar:
         "Transcription", "Translation", "Voice-Over"
     ])
     
-    # Matching tool pool items from your onboarding setup
     cat_options = [
         "MateCat", "MateSub", "MemoQ", "Phrase", "SDL Trados 2019", 
         "SDL Trados 2021", "SDL Trados 2022", "Similis", "SmartCAT", 
         "Smartling", "Wordfast"
     ]
-    selected_tools = st.multiselect("Client Tool *", options=cat_options)
+    selected_tools = st.multiselect("Client CAT Tool *", options=cat_options)
     
     volume = st.text_input("Volume (Words / Minutes) *", placeholder="e.g., 5000 words")
     
@@ -140,7 +139,8 @@ with st.sidebar:
     with col_curr:
         currency = st.selectbox("Currency", options=["USD ($)", "JPY (¥)", "INR (₹)"], label_visibility="collapsed")
     with col_amt:
-        budget_val = st.number_input("Amount", min_value=0.0, step=50.0, format="%.2f", label_visibility="collapsed")
+        # Changed step value to 0.001 and removed strict string formatting limits to prevent decimal cutoff drops
+        budget_val = st.number_input("Amount", min_value=0.000, step=0.001, format="%f", label_visibility="collapsed")
     
     st.markdown(" ")
     if st.button("Submit to VM Pipeline", use_container_width=True, type="primary"):
@@ -151,7 +151,13 @@ with st.sidebar:
             formatted_deadline = f"{deadline_date.strftime('%Y-%m-%d')} {selected_hour}:{selected_min} IST"
             
             symbol = currency.split(" ")[1].replace("(", "").replace(")", "")
-            formatted_budget = f"{symbol}{budget_val:,.2f}" if "JPY" not in currency else f"{symbol}{int(budget_val):,}"
+            
+            # Format output presentation to perfectly retain multi-decimal fraction logic string drops
+            if "JPY" in currency:
+                formatted_budget = f"{symbol}{int(budget_val):,}"
+            else:
+                # If the value has fractions beyond two decimals, print full precision, else default standard formatting
+                formatted_budget = f"{symbol}{budget_val:.3f}".rstrip('0').rstrip('.') if budget_val % 0.01 != 0 else f"{symbol}{budget_val:,.2f}"
             
             new_task = {
                 "Timestamp": datetime.now().strftime("%Y-%m-%d %H:%M"),
