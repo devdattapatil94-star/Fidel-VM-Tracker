@@ -122,6 +122,9 @@ with st.sidebar:
     
     volume = st.text_input("Volume (Words / Minutes) *", placeholder="e.g., 5000 words")
     
+    # Optional sample/reference file uploader option component drop matrix
+    ref_file = st.file_uploader("Reference or sample file (if any)", type=['txt', 'pdf', 'doc', 'docx', 'xls', 'xlsx', 'zip'])
+    
     st.markdown("<label style='font-size: 14px;'>Client Deadline Date *</label>", unsafe_allow_html=True)
     deadline_date = st.date_input("Deadline Date", datetime.today(), label_visibility="collapsed")
     
@@ -139,7 +142,6 @@ with st.sidebar:
     with col_curr:
         currency = st.selectbox("Currency", options=["USD ($)", "JPY (¥)", "INR (₹)"], label_visibility="collapsed")
     with col_amt:
-        # Changed step value to 0.001 and removed strict string formatting limits to prevent decimal cutoff drops
         budget_val = st.number_input("Amount", min_value=0.000, step=0.001, format="%f", label_visibility="collapsed")
     
     st.markdown(" ")
@@ -151,13 +153,13 @@ with st.sidebar:
             formatted_deadline = f"{deadline_date.strftime('%Y-%m-%d')} {selected_hour}:{selected_min} IST"
             
             symbol = currency.split(" ")[1].replace("(", "").replace(")", "")
-            
-            # Format output presentation to perfectly retain multi-decimal fraction logic string drops
             if "JPY" in currency:
                 formatted_budget = f"{symbol}{int(budget_val):,}"
             else:
-                # If the value has fractions beyond two decimals, print full precision, else default standard formatting
                 formatted_budget = f"{symbol}{budget_val:.3f}".rstrip('0').rstrip('.') if budget_val % 0.01 != 0 else f"{symbol}{budget_val:,.2f}"
+            
+            # Extract name string if file exists
+            file_name_record = ref_file.name if ref_file is not None else "None"
             
             new_task = {
                 "Timestamp": datetime.now().strftime("%Y-%m-%d %H:%M"),
@@ -166,6 +168,7 @@ with st.sidebar:
                 "Task Type": task_type,
                 "CAT Tool(s)": tools_str,
                 "Volume": volume,
+                "Reference File": file_name_record,
                 "Deadline (IST)": formatted_deadline,
                 "Budget": formatted_budget,
                 "Status": "Pipeline Intake"
