@@ -14,20 +14,21 @@ st.set_page_config(
 
 DB_FILE = "pipeline_database.csv"
 
-# Status drop-down menu array items exactly matching your tracking lifecycle requirements
-STATUS_OPTIONS = [
-    "Not started", 
-    "In progress", 
-    "Completed", 
-    "Cancelled", 
-    "Delayed", 
-    "In Discussion stage with the PM", 
-    "In Discussion stage with the client", 
-    "No Response received later from the linguist", 
-    "Pending"
-]
+# Color assignment directory mapping statuses to their exact visual theme badges
+STATUS_STYLES = {
+    "Not started": {"bg": "#D1E7DD", "color": "#0F5132"},                          # Soft Green
+    "In progress": {"bg": "#FFF3CD", "color": "#664D03"},                          # Soft Yellow
+    "Completed": {"bg": "#D1E7DD", "color": "#0F5132"},                            # Soft Green
+    "Cancelled": {"bg": "#E2E3E5", "color": "#41464B"},                            # Soft Grey
+    "Delayed": {"bg": "#F8D7DA", "color": "#842029"},                              # Soft Dark Red
+    "In Discussion stage with the PM": {"bg": "#E8DEF8", "color": "#21005D"},      # Light Purple
+    "In Discussion stage with the client": {"bg": "#D0BCFF", "color": "#381E72"},  # Darker Purple
+    "No Response received later from the linguist": {"bg": "#F7E1D7", "color": "#4A2810"}, # Brownish
+    "Pending": {"bg": "#DC3545", "color": "#FFFFFF"}                               # Vibrant Crimson Red
+}
 
-# Master list array containing your explicit language directory selections
+STATUS_OPTIONS = list(STATUS_STYLES.keys())
+
 LANGUAGES_POOL = [
     "Afar", "Afrikaans (South Africa)", "Ahrani", "Akan", "Akha", "Albanian", "Amharic", 
     "Ancient Greek", "Arabic", "Arabic (Egypt)", "Arabic (Oman)", "Arabic (Algeria)", 
@@ -103,14 +104,12 @@ LANGUAGES_POOL = [
     "Yagwoia", "Yiddish (Israel)", "Yiddish (USA)", "Yoruba", "Zomi/Zou", "Zulu (South Africa)"
 ]
 
-# Robust read execution to retain structural pipeline data state across sessions safely
 def load_database():
     if os.path.exists(DB_FILE):
         try:
             return pd.read_csv(DB_FILE)
         except:
             pass
-    # Create layout columns configuration structure fallback map
     return pd.DataFrame(columns=[
         "Project ID", "Timestamp", "Source Language", "Target Language", 
         "Task Type", "CAT Tool(s)", "Volume", "Reference File", 
@@ -188,8 +187,6 @@ with st.sidebar:
                 formatted_budget = f"{symbol}{budget_val:.3f}".rstrip('0').rstrip('.') if budget_val % 0.01 != 0 else f"{symbol}{budget_val:,.2f}"
             
             file_name_record = ref_file.name if ref_file is not None else "None"
-            
-            # Form unique index matrix tracker values
             proj_id = f"FID-{datetime.now().strftime('%m%d%H%M%S')}"
             
             new_task = pd.DataFrame([{
@@ -206,7 +203,6 @@ with st.sidebar:
                 "Status": "Not started"
             }])
             
-            # Combine entry arrays safely and write changes down immediately
             df_updated = pd.concat([df_db, new_task], ignore_index=True)
             save_database(df_updated)
             st.success("🎯 Task successfully routed to main production queue.")
@@ -231,17 +227,16 @@ with col_title:
 st.write("Track active localization workflows, monitor client budgets against vendor rates, and manage execution states seamlessly.")
 st.markdown("---")
 
-# Conditional tracking row matrix generation pad
 if len(df_db) == 0:
     st.info("💡 No active pipeline requirements registered yet. Use the sidebar form to populate tasks into the tracker matrix.")
 else:
     st.markdown("### 📋 Production Control Console")
-    st.caption("💡 Double-click any cell in the **Status** column to swap steps instantly. Changes save to the system database automatically.")
+    st.caption("💡 Double-click any cell in the **Status** column to activate the dropdown list selector.")
     
-    # Sort with newest entries at the absolute top position
+    # Render with newest entries positioned on top
     df_display = df_db.iloc[::-1].copy()
     
-    # Initialize the data editor console with standard dropdown limits matching your graphic perfectly
+    # Main dynamic configuration pad
     edited_df = st.data_editor(
         df_display,
         use_container_width=True,
@@ -250,7 +245,7 @@ else:
         column_config={
             "Status": st.column_config.SelectboxColumn(
                 "Status",
-                help="Update project completion state matrix",
+                help="Change project tracking state mapping metrics",
                 width="large",
                 options=STATUS_OPTIONS,
                 required=True
@@ -258,9 +253,27 @@ else:
         }
     )
     
-    # Check if a PM changed a value, synchronize it, and rewrite it back to the database sheet instantly
+    # Check for layout adjustments, parse rows, and commit modifications
     if not edited_df.equals(df_display):
         df_original_order = edited_df.iloc[::-1].reset_index(drop=True)
         save_database(df_original_order)
         st.toast("💾 Project pipeline status synchronized perfectly!", icon="✅")
         st.rerun()
+        
+    # --- VISUAL REFERENCE BOARD SECTION ---
+    st.markdown("---")
+    st.markdown("### 🏷️ Status Tag Key Matrix")
+    st.write("Review the project color assignment rules deployed across your production lifecycle layers:")
+    
+    # Generate custom pill columns inline
+    cols_pills = st.columns(len(STATUS_OPTIONS))
+    for i, opt in enumerate(STATUS_OPTIONS):
+        with cols_pills[i % len(STATUS_OPTIONS)]:
+            style = STATUS_STYLES[opt]
+            st.markdown(
+                f'<div style="background-color: {style["bg"]}; color: {style["color"]}; '
+                f'padding: 6px 12px; border-radius: 16px; font-weight: bold; font-size: 13px; '
+                f'text-align: center; border: 1px solid {style["color"]}40; margin-bottom: 5px;">'
+                f'{opt}</div>', 
+                unsafe_allow_html=True
+            )
