@@ -14,20 +14,18 @@ st.set_page_config(
 
 DB_FILE = "pipeline_database.csv"
 
-# Color assignment directory mapping statuses to their exact visual theme badges
-STATUS_STYLES = {
-    "Not started": {"bg": "#D1E7DD", "color": "#0F5132"},                          # Soft Green
-    "In progress": {"bg": "#FFF3CD", "color": "#664D03"},                          # Soft Yellow
-    "Completed": {"bg": "#D1E7DD", "color": "#0F5132"},                            # Soft Green
-    "Cancelled": {"bg": "#E2E3E5", "color": "#41464B"},                            # Soft Grey
-    "Delayed": {"bg": "#F8D7DA", "color": "#842029"},                              # Soft Dark Red
-    "In Discussion stage with the PM": {"bg": "#E8DEF8", "color": "#21005D"},      # Light Purple
-    "In Discussion stage with the client": {"bg": "#D0BCFF", "color": "#381E72"},  # Darker Purple
-    "No Response received later from the linguist": {"bg": "#F7E1D7", "color": "#4A2810"}, # Brownish
-    "Pending": {"bg": "#DC3545", "color": "#FFFFFF"}                               # Vibrant Crimson Red
-}
-
-STATUS_OPTIONS = list(STATUS_STYLES.keys())
+# The specific project tracking lifecycle choices for the VM team
+STATUS_OPTIONS = [
+    "Not started", 
+    "In progress", 
+    "Completed", 
+    "Cancelled", 
+    "Delayed", 
+    "In Discussion stage with the PM", 
+    "In Discussion stage with the client", 
+    "No Response received later from the linguist", 
+    "Pending"
+]
 
 LANGUAGES_POOL = [
     "Afar", "Afrikaans (South Africa)", "Ahrani", "Akan", "Akha", "Albanian", "Amharic", 
@@ -122,7 +120,7 @@ def save_database(df):
 df_db = load_database()
 
 # ==========================================
-# 2. SIDEBAR NAVIGATION & INTAKE CONTROL ENGINE
+# 2. SIDEBAR - PM / SALES INTAKE FORM (LEFT)
 # ==========================================
 with st.sidebar:
     st.markdown("### 📥 PM / Sales Project Intake")
@@ -200,7 +198,7 @@ with st.sidebar:
                 "Reference File": file_name_record,
                 "Deadline (IST)": formatted_deadline,
                 "Budget": formatted_budget,
-                "Status": "Not started"
+                "Status": "Not started" # Always defaults to Not started on PM submission
             }])
             
             df_updated = pd.concat([df_db, new_task], ignore_index=True)
@@ -211,7 +209,7 @@ with st.sidebar:
             st.error("❌ Form Incomplete. Please specify languages, tools, volume, and budget metrics.")
 
 # ==========================================
-# 3. MAIN DASHBOARD FRAME DISPLAY LAYER
+# 3. MAIN WORKSPACE - VM CONTROL CONSOLE (RIGHT)
 # ==========================================
 col_icon, col_title = st.columns([0.6, 5.4], vertical_alignment="center")
 with col_icon:
@@ -231,16 +229,17 @@ if len(df_db) == 0:
     st.info("💡 No active pipeline requirements registered yet. Use the sidebar form to populate tasks into the tracker matrix.")
 else:
     st.markdown("### 📋 Production Control Console")
-    st.caption("💡 Double-click any cell in the **Status** column to activate the dropdown list selector.")
+    st.caption("💡 **VM Action Panel:** Double-click any cell inside the **Status** column to change the pipeline progress state. PM input fields remain completely read-only.")
     
     # Render with newest entries positioned on top
-    df_display = df_db.iloc[::-1].copy()
+    df_display = df_db.copy()
     
-    # Main dynamic configuration pad
+    # Main active workspace data grid interface configurations
     edited_df = st.data_editor(
         df_display,
         use_container_width=True,
         hide_index=True,
+        # Lock down ALL columns except the "Status" tracker matrix column
         disabled=["Project ID", "Timestamp", "Source Language", "Target Language", "Task Type", "CAT Tool(s)", "Volume", "Reference File", "Deadline (IST)", "Budget"],
         column_config={
             "Status": st.column_config.SelectboxColumn(
@@ -253,27 +252,8 @@ else:
         }
     )
     
-    # Check for layout adjustments, parse rows, and commit modifications
+    # Capture changes made by the VM team in the spreadsheet dropdown and rewrite to CSV instantly
     if not edited_df.equals(df_display):
-        df_original_order = edited_df.iloc[::-1].reset_index(drop=True)
-        save_database(df_original_order)
+        save_database(edited_df)
         st.toast("💾 Project pipeline status synchronized perfectly!", icon="✅")
         st.rerun()
-        
-    # --- VISUAL REFERENCE BOARD SECTION ---
-    st.markdown("---")
-    st.markdown("### 🏷️ Status Tag Key Matrix")
-    st.write("Review the project color assignment rules deployed across your production lifecycle layers:")
-    
-    # Generate custom pill columns inline
-    cols_pills = st.columns(len(STATUS_OPTIONS))
-    for i, opt in enumerate(STATUS_OPTIONS):
-        with cols_pills[i % len(STATUS_OPTIONS)]:
-            style = STATUS_STYLES[opt]
-            st.markdown(
-                f'<div style="background-color: {style["bg"]}; color: {style["color"]}; '
-                f'padding: 6px 12px; border-radius: 16px; font-weight: bold; font-size: 13px; '
-                f'text-align: center; border: 1px solid {style["color"]}40; margin-bottom: 5px;">'
-                f'{opt}</div>', 
-                unsafe_allow_html=True
-            )
